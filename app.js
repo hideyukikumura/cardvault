@@ -190,6 +190,8 @@ const I18N = {
     duelRankingEmpty: 'まだポイントが入っていません',
     duelRankingCount: '{count}pt',
     duelEmptyNotEnoughCards: '対戦させるには名刺が2枚以上必要です',
+    duelSelectingOpponent: '対戦相手選択中',
+    duelOpponentsDecided: '対戦カード決定！',
     btnStartDuel: 'デュエル開始',
     btnDuelReselect: '対戦相手再選択',
     duelOpening: 'デュエル開始…！',
@@ -398,6 +400,8 @@ const I18N = {
     duelRankingEmpty: 'No points yet',
     duelRankingCount: '{count}pt',
     duelEmptyNotEnoughCards: 'You need at least 2 cards to duel',
+    duelSelectingOpponent: 'Selecting opponent...',
+    duelOpponentsDecided: 'Matchup decided!',
     btnStartDuel: 'Start Duel',
     btnDuelReselect: 'Reselect Opponents',
     duelOpening: 'Duel start...!',
@@ -653,6 +657,8 @@ const elements = {
   btnDuelReselect: document.getElementById('btn-duel-reselect'),
   duelResult: document.getElementById('duel-result'),
   duelBattleCount: document.getElementById('duel-battle-count'),
+  duelSelectPopup: document.getElementById('duel-select-popup'),
+  duelSelectPopupTitle: document.getElementById('duel-select-popup-title'),
   // Common UI
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
@@ -3148,6 +3154,19 @@ function updateDuelBar() {
   elements.duelBarMarker.style.left = `${percent}%`;
 }
 
+// 対戦相手選択中／決定時に画面中央へ一瞬（または選択中の間）表示するポップアップ
+let duelSelectPopupTimeout;
+function showDuelSelectPopup(textKey, autoHideMs) {
+  elements.duelSelectPopupTitle.textContent = t(textKey);
+  clearTimeout(duelSelectPopupTimeout);
+  elements.duelSelectPopup.classList.add('active');
+  if (autoHideMs) {
+    duelSelectPopupTimeout = setTimeout(() => {
+      elements.duelSelectPopup.classList.remove('active');
+    }, autoHideMs);
+  }
+}
+
 async function spinDuelSlotMachine() {
   if (STATE.cards.length < 2) {
     showDuelView('match');
@@ -3163,6 +3182,8 @@ async function spinDuelSlotMachine() {
   elements.duelResult.innerHTML = '';
   STATE.duel.winner = null;
   resetDuelBar();
+
+  showDuelSelectPopup('duelSelectingOpponent');
 
   const spins = 12;
   for (let i = 0; i < spins; i++) {
@@ -3180,6 +3201,8 @@ async function spinDuelSlotMachine() {
     renderDuelFighterFinal('right', finalRight),
   ]);
   resetDuelBar();
+
+  showDuelSelectPopup('duelOpponentsDecided', 1500);
 
   STATE.duel.inProgress = false;
   setDuelControlsDisabled(false);
