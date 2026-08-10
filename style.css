@@ -1826,18 +1826,6 @@ body {
   transition: width 0.4s ease;
 }
 
-.duel-bar-marker {
-  position: absolute;
-  top: 50%;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--text-on-accent);
-  box-shadow: var(--accent-glow);
-  transform: translate(-50%, -50%);
-  transition: left 0.4s ease;
-}
-
 .duel-result {
   animation: kassen-reveal 0.4s ease;
 }

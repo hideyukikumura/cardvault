@@ -691,7 +691,6 @@ const elements = {
   duelRightName: document.getElementById('duel-right-name'),
   duelBarFillLeft: document.getElementById('duel-bar-fill-left'),
   duelBarFillRight: document.getElementById('duel-bar-fill-right'),
-  duelBarMarker: document.getElementById('duel-bar-marker'),
   duelCommentary: document.getElementById('duel-commentary'),
   duelCommentaryText: document.getElementById('duel-commentary-text'),
   btnStartDuel: document.getElementById('btn-start-duel'),
@@ -3275,7 +3274,6 @@ function updateDuelBar() {
   const percent = Math.max(0, Math.min(100, 50 + (net / 3) * 50));
   elements.duelBarFillLeft.style.width = `${percent}%`;
   elements.duelBarFillRight.style.width = `${100 - percent}%`;
-  elements.duelBarMarker.style.left = `${percent}%`;
 }
 
 // 対戦相手選択中／決定時に画面中央へ一瞬（または選択中の間）表示するポップアップ
@@ -3376,6 +3374,7 @@ async function startDuel() {
 
   STATE.duel.inProgress = true;
   elements.btnStartDuel.classList.add('hidden');
+  elements.btnDuelReselect.classList.add('hidden');
   setDuelControlsDisabled(true);
 
   // これまでのデュエル数をカウント。100の倍数は「100回記念大会」（+10pt）、
@@ -3424,6 +3423,7 @@ async function startDuel() {
 
   await showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel);
 
+  elements.btnDuelReselect.classList.remove('hidden');
   setDuelControlsDisabled(false);
   STATE.duel.inProgress = false;
 }
