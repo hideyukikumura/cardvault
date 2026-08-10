@@ -43,8 +43,10 @@ self.addEventListener('activate', (e) => {
 // ネットワーク優先: 常に最新ファイルの取得を試み、オフライン時のみキャッシュにフォールバックする。
 // これによりデプロイ時にCACHE_NAMEを手動更新しなくても、アプリを開くたびに最新の内容が反映される。
 self.addEventListener('fetch', (e) => {
-  // Prevent caching for API calls or external auth requests
-  if (e.request.url.includes('googleapis.com') || e.request.url.includes('accounts.google.com')) {
+  // 外部（Google関連含む）へのリクエストはすべてキャッシュ対象外とし、ブラウザに直接処理させる。
+  // Picker機能で使うapis.google.com/gstatic.com等、ドメインを列挙する方式は漏れが起きやすいため、
+  // 自オリジン以外は一律で素通しする
+  if (new URL(e.request.url).origin !== self.location.origin) {
     return; // Let browser handle network
   }
 

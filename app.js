@@ -257,6 +257,7 @@ const I18N = {
     loadingDefault: '読み込み中...',
     loadingSigningIn: 'Googleでサインイン中...',
     loadingSyncing: 'Googleドライブと同期中...',
+    loadingOpeningPicker: 'フォルダ選択ツールを準備中...',
     loadingImage: '画像を読み込み中...',
     loadingDeleting: '名刺を削除中...',
     loadingSavingNew: 'Googleドライブに保存中...',
@@ -476,6 +477,7 @@ const I18N = {
     loadingDefault: 'Loading...',
     loadingSigningIn: 'Signing in with Google...',
     loadingSyncing: 'Syncing with Google Drive...',
+    loadingOpeningPicker: 'Preparing folder picker...',
     loadingImage: 'Loading image...',
     loadingDeleting: 'Deleting card...',
     loadingSavingNew: 'Saving to Google Drive...',
@@ -927,7 +929,15 @@ function loadGooglePicker() {
 // drive.fileスコープのままアクセス権が付与されるため、スコープを広げる必要はない）。
 // キャンセル時はnullを返す
 async function openFolderPicker() {
-  await loadGooglePicker();
+  // Pickerモジュールの読み込みには通信を伴うため、その間だけローディング表示を出す。
+  // 表示したままpicker.setVisible(true)まで進むと、全画面オーバーレイがPickerダイアログの
+  // クリックを塞いでしまうため、Picker表示直前に必ず隠す
+  showLoading(t('loadingOpeningPicker'));
+  try {
+    await loadGooglePicker();
+  } finally {
+    hideLoading();
+  }
 
   return new Promise((resolve) => {
     const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
@@ -1686,14 +1696,20 @@ function registerEventListeners() {
 
   // 設定画面：保存先フォルダの変更
   elements.btnChangeFolder.addEventListener('click', async () => {
-    const folder = await openFolderPicker();
-    if (!folder) return;
+    try {
+      const folder = await openFolderPicker();
+      if (!folder) return;
 
-    saveSelectedFolder(folder);
-    // フォルダが変わったので、以前のフォルダのmetadata.json参照は破棄して読み直す
-    STATE.metadataFileId = '';
-    localStorage.removeItem('metadataFileId');
-    await syncWithDrive();
+      saveSelectedFolder(folder);
+      // フォルダが変わったので、以前のフォルダのmetadata.json参照は破棄して読み直す
+      STATE.metadataFileId = '';
+      localStorage.removeItem('metadataFileId');
+      await syncWithDrive();
+    } catch (error) {
+      console.error('Folder Change Error:', error);
+      hideLoading();
+      showToast(t('toastSyncError'));
+    }
   });
 
   // 設定画面：合戦履歴のリセット（確認ダイアログ）
