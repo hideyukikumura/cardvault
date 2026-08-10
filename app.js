@@ -32,6 +32,10 @@ let STATE = {
   // 一度でも達成したミッションのID一覧（Google Driveに保存）。
   // 合戦データのリセット等で元になる数値が0に戻っても、ここに記録済みのミッションは達成済みのまま保持する
   missionsAchieved: new Set(),
+  // 起動日ミッション用の記録（いずれもGoogle Driveに保存）
+  lastLaunchDate: null,        // 前回アプリを起動した日（'YYYY-MM-DD'）
+  launchStreak: 0,             // 現在の連続起動日数
+  returnAfterGapDetected: false, // 3日以上の間隔をあけてから起動したことが一度でもあるか
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -59,6 +63,7 @@ const I18N = {
     missionCardsWithMemo10: 'メモありで名刺を10枚登録',
     missionCardsWithoutMemo10: 'メモなしで名刺を10枚登録',
     missionThresholdTags: '{count}種類のタグ登録',
+    missionMaxTagsOnCard: '{count}つのタグを持った名刺を登録',
     missionThresholdTagBattles: 'タグモードで{count}回合戦',
     missionThresholdInitialBattles: 'イニシャルモードで{count}回合戦',
     missionHexCount100: 'マップのヘックス総数100個達成',
@@ -66,6 +71,8 @@ const I18N = {
     missionAlphabetCount: 'イニシャル{count}文字制覇',
     missionAlphabetHalf: 'イニシャルアルファベット50%制覇',
     missionAlphabetFull: 'イニシャルアルファベット全制覇',
+    missionLaunchStreak3: '3日連続アプリ起動',
+    missionReturnAfterGap3: '3日振りにアプリ起動',
     missionCompleteAll: '全てのミッションをコンプリート',
     missionThanks: 'ありがとう！',
     missionAchieved: '達成済み',
@@ -206,6 +213,7 @@ const I18N = {
     missionCardsWithMemo10: 'Register 10 cards with a memo',
     missionCardsWithoutMemo10: 'Register 10 cards without a memo',
     missionThresholdTags: '{count}-tag milestone',
+    missionMaxTagsOnCard: 'Register a card with {count}+ tags',
     missionThresholdTagBattles: '{count} Tag Mode battles',
     missionThresholdInitialBattles: '{count} Initial Mode battles',
     missionHexCount100: 'Reach 100 hexes on the map',
@@ -213,6 +221,8 @@ const I18N = {
     missionAlphabetCount: 'Conquer {count} initials',
     missionAlphabetHalf: 'Conquer 50% of the alphabet',
     missionAlphabetFull: 'Conquer the entire alphabet',
+    missionLaunchStreak3: 'Open the app 3 days in a row',
+    missionReturnAfterGap3: 'Come back after 3+ days away',
     missionCompleteAll: 'Complete All Missions',
     missionThanks: 'Thank you!',
     missionAchieved: 'Achieved',
@@ -752,7 +762,8 @@ async function syncWithDrive() {
 
     // 3. メタデータファイルのダウンロード
     await loadMetadata();
-    
+    trackAppLaunch();
+
     hideLoading();
     showToast(t('toastSyncComplete'));
     renderApp();
@@ -808,7 +819,7 @@ async function getOrCreateMetadataFileId() {
 
   const boundary = 'foo_bar_baz';
   const metadataPart = JSON.stringify(fileMetadata);
-  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [] }); // 空の名刺リスト
+  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false }); // 空の名刺リスト
 
   const multipartBody = 
     `\r\n--${boundary}\r\n` +
@@ -842,11 +853,17 @@ async function loadMetadata() {
       STATE.kassenBattleCount = readLegacyLocalBattleCount();
       STATE.islandDetected = false;
       STATE.missionsAchieved = new Set();
+      STATE.lastLaunchDate = null;
+      STATE.launchStreak = 0;
+      STATE.returnAfterGapDetected = false;
     } else {
       STATE.cards = data.cards || [];
       STATE.kassenBattleCount = normalizeKassenBattleCount(data.kassenBattleCount);
       STATE.islandDetected = !!data.islandDetected;
       STATE.missionsAchieved = new Set(Array.isArray(data.missionsAchieved) ? data.missionsAchieved : []);
+      STATE.lastLaunchDate = data.lastLaunchDate || null;
+      STATE.launchStreak = data.launchStreak || 0;
+      STATE.returnAfterGapDetected = !!data.returnAfterGapDetected;
     }
   } else {
     throw new Error('Failed to load metadata');
@@ -874,7 +891,15 @@ async function saveMetadata() {
   const res = await driveFetch(`${DRIVE_UPLOAD_BASE}/files/${STATE.metadataFileId}?uploadType=media`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cards: STATE.cards, kassenBattleCount: STATE.kassenBattleCount, islandDetected: STATE.islandDetected, missionsAchieved: [...STATE.missionsAchieved] })
+    body: JSON.stringify({
+      cards: STATE.cards,
+      kassenBattleCount: STATE.kassenBattleCount,
+      islandDetected: STATE.islandDetected,
+      missionsAchieved: [...STATE.missionsAchieved],
+      lastLaunchDate: STATE.lastLaunchDate,
+      launchStreak: STATE.launchStreak,
+      returnAfterGapDetected: STATE.returnAfterGapDetected,
+    })
   });
   return res.ok;
 }
@@ -975,12 +1000,15 @@ function showSortModePopup() {
   const isAlphabet = STATE.sortMode === 'alphabet';
   elements.sortModePopupTitle.textContent = t(isAlphabet ? 'sortPopupAlphabetTitle' : 'sortPopupNewestTitle');
 
-  // 名刺画像（読み込み中のスピナーが出る部分）の縦方向の中心に合わせて表示位置を調整
+  // 名刺画像（読み込み中のスピナーが出る部分）の位置に合わせて表示位置を調整。
+  // 画像エリアの高さはタグ数やメモの有無で名刺ごとに変わってしまうため、
+  // 高さに影響されない画像エリアの上端を基準に、固定オフセットで狙う
   const activeCard = elements.cardDeck.querySelectorAll('.business-card')[currentSwipeIndex];
   const imageWrapper = activeCard && activeCard.querySelector('.card-image-wrapper');
   const targetRect = (imageWrapper || elements.cardDeck).getBoundingClientRect();
   const containerRect = elements.sortModePopup.offsetParent.getBoundingClientRect();
-  elements.sortModePopup.style.top = `${targetRect.top + targetRect.height / 2 - containerRect.top}px`;
+  const SORT_POPUP_OFFSET_FROM_IMAGE_TOP = 140;
+  elements.sortModePopup.style.top = `${targetRect.top - containerRect.top + SORT_POPUP_OFFSET_FROM_IMAGE_TOP}px`;
 
   clearTimeout(sortModePopupTimeout);
   elements.sortModePopup.classList.add('active');
@@ -1819,6 +1847,13 @@ const MISSION_BASE_CATEGORIES = [
     getThresholdLabel: threshold => t('missionThresholdTags', { count: threshold }),
   },
   {
+    // 1枚の名刺に付けられたタグ数の最大値（3つ・5つ以上のタグを持つ名刺を登録したか）
+    key: 'maxTagsOnCard',
+    thresholds: [3, 5],
+    getCount: () => STATE.cards.reduce((max, card) => Math.max(max, (card.tags || []).length), 0),
+    getThresholdLabel: threshold => t('missionMaxTagsOnCard', { count: threshold }),
+  },
+  {
     key: 'tagBattles',
     thresholds: [1, 5, 10, 25, 50, 100],
     getCount: () => getKassenBattleCount('tag'),
@@ -1856,6 +1891,20 @@ const MISSION_BASE_CATEGORIES = [
       if (threshold === 13) return t('missionAlphabetHalf');
       return t('missionAlphabetCount', { count: threshold });
     },
+  },
+  {
+    // 3日連続でアプリを起動したか
+    key: 'launchStreak',
+    thresholds: [3],
+    getCount: () => STATE.launchStreak,
+    getThresholdLabel: () => t('missionLaunchStreak3'),
+  },
+  {
+    // 3日以上の間隔をあけてから起動したことが一度でもあるか
+    key: 'returnAfterGap',
+    thresholds: [1],
+    getCount: () => (STATE.returnAfterGapDetected ? 1 : 0),
+    getThresholdLabel: () => t('missionReturnAfterGap3'),
   },
 ];
 
@@ -1918,6 +1967,27 @@ function persistAchievedMissions() {
   if (changed) {
     saveMetadata().catch(err => console.error('ミッション達成状況の保存に失敗しました:', err));
   }
+}
+
+// 起動日ミッション用の記録を更新する。同じ日に何度同期しても二重カウントしない
+function trackAppLaunch() {
+  const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+  if (STATE.lastLaunchDate === todayStr) return;
+
+  if (STATE.lastLaunchDate) {
+    const prevDate = new Date(`${STATE.lastLaunchDate}T00:00:00Z`);
+    const todayDate = new Date(`${todayStr}T00:00:00Z`);
+    const gapDays = Math.round((todayDate - prevDate) / 86400000);
+
+    STATE.launchStreak = gapDays === 1 ? STATE.launchStreak + 1 : 1;
+    if (gapDays >= 3) STATE.returnAfterGapDetected = true;
+  } else {
+    STATE.launchStreak = 1;
+  }
+
+  STATE.lastLaunchDate = todayStr;
+  saveMetadata().catch(err => console.error('起動記録の保存に失敗しました:', err));
+  updateMissionsGlow();
 }
 
 // 達成済みだが、まだミッション画面で「？」から達成内容へめくる演出を見せていないミッション
