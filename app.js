@@ -36,6 +36,9 @@ let STATE = {
   lastLaunchDate: null,        // 前回アプリを起動した日（'YYYY-MM-DD'）
   launchStreak: 0,             // 現在の連続起動日数
   returnAfterGapDetected: false, // 3日以上の間隔をあけてから起動したことが一度でもあるか
+  // 並べ替えミッション用の記録（いずれもGoogle Driveに保存）
+  usedAlphabetSort: false,          // 一度でもアルファベット順に並べ替えたか
+  usedNewestSortAfterAlphabet: false, // アルファベット順に並べ替えた後、登録順に戻したことがあるか
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -71,6 +74,8 @@ const I18N = {
     missionAlphabetCount: 'イニシャル{count}文字制覇',
     missionAlphabetHalf: 'イニシャルアルファベット50%制覇',
     missionAlphabetFull: 'イニシャルアルファベット全制覇',
+    missionSortAlphabet: 'アルファベット順に並べ替え',
+    missionSortNewestAfterAlphabet: '登録順に並べ替え',
     missionLaunchStreak3: '3日連続アプリ起動',
     missionReturnAfterGap3: '3日振りにアプリ起動',
     missionCompleteAll: '全てのミッションをコンプリート',
@@ -221,6 +226,8 @@ const I18N = {
     missionAlphabetCount: 'Conquer {count} initials',
     missionAlphabetHalf: 'Conquer 50% of the alphabet',
     missionAlphabetFull: 'Conquer the entire alphabet',
+    missionSortAlphabet: 'Sort alphabetically',
+    missionSortNewestAfterAlphabet: 'Sort back to newest first',
     missionLaunchStreak3: 'Open the app 3 days in a row',
     missionReturnAfterGap3: 'Come back after 3+ days away',
     missionCompleteAll: 'Complete All Missions',
@@ -819,7 +826,7 @@ async function getOrCreateMetadataFileId() {
 
   const boundary = 'foo_bar_baz';
   const metadataPart = JSON.stringify(fileMetadata);
-  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false }); // 空の名刺リスト
+  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false }); // 空の名刺リスト
 
   const multipartBody = 
     `\r\n--${boundary}\r\n` +
@@ -856,6 +863,8 @@ async function loadMetadata() {
       STATE.lastLaunchDate = null;
       STATE.launchStreak = 0;
       STATE.returnAfterGapDetected = false;
+      STATE.usedAlphabetSort = false;
+      STATE.usedNewestSortAfterAlphabet = false;
     } else {
       STATE.cards = data.cards || [];
       STATE.kassenBattleCount = normalizeKassenBattleCount(data.kassenBattleCount);
@@ -864,6 +873,8 @@ async function loadMetadata() {
       STATE.lastLaunchDate = data.lastLaunchDate || null;
       STATE.launchStreak = data.launchStreak || 0;
       STATE.returnAfterGapDetected = !!data.returnAfterGapDetected;
+      STATE.usedAlphabetSort = !!data.usedAlphabetSort;
+      STATE.usedNewestSortAfterAlphabet = !!data.usedNewestSortAfterAlphabet;
     }
   } else {
     throw new Error('Failed to load metadata');
@@ -899,6 +910,8 @@ async function saveMetadata() {
       lastLaunchDate: STATE.lastLaunchDate,
       launchStreak: STATE.launchStreak,
       returnAfterGapDetected: STATE.returnAfterGapDetected,
+      usedAlphabetSort: STATE.usedAlphabetSort,
+      usedNewestSortAfterAlphabet: STATE.usedNewestSortAfterAlphabet,
     })
   });
   return res.ok;
@@ -1015,6 +1028,24 @@ function showSortModePopup() {
   sortModePopupTimeout = setTimeout(() => {
     elements.sortModePopup.classList.remove('active');
   }, 1200);
+}
+
+// 並べ替えミッション用の記録を更新する
+// 「登録順に並べ替え」は、一度アルファベット順にしてから登録順へ戻した場合のみ達成とする
+function trackSortMissionProgress() {
+  let changed = false;
+  if (STATE.sortMode === 'alphabet' && !STATE.usedAlphabetSort) {
+    STATE.usedAlphabetSort = true;
+    changed = true;
+  }
+  if (STATE.sortMode === 'newest' && STATE.usedAlphabetSort && !STATE.usedNewestSortAfterAlphabet) {
+    STATE.usedNewestSortAfterAlphabet = true;
+    changed = true;
+  }
+  if (changed) {
+    saveMetadata().catch(err => console.error('並べ替えミッションの記録の保存に失敗しました:', err));
+    updateMissionsGlow();
+  }
 }
 
 function filterCards() {
@@ -1366,6 +1397,7 @@ function registerEventListeners() {
     STATE.sortMode = STATE.sortMode === 'newest' ? 'alphabet' : 'newest';
     updateSortButtonUI();
     showSortModePopup();
+    trackSortMissionProgress();
     renderApp();
   });
 
@@ -1492,6 +1524,7 @@ function registerEventListeners() {
   elements.btnKassen.addEventListener('click', openKassenMode);
   elements.btnCloseKassen.addEventListener('click', () => {
     showScreen('screen-main');
+    updateMissionsGlow();
   });
 
   // 合戦モード：ランキング表示の切り替え（トグル）
@@ -1891,6 +1924,20 @@ const MISSION_BASE_CATEGORIES = [
       if (threshold === 13) return t('missionAlphabetHalf');
       return t('missionAlphabetCount', { count: threshold });
     },
+  },
+  {
+    // 一度でもアルファベット順に並べ替えたか
+    key: 'sortAlphabet',
+    thresholds: [1],
+    getCount: () => (STATE.usedAlphabetSort ? 1 : 0),
+    getThresholdLabel: () => t('missionSortAlphabet'),
+  },
+  {
+    // アルファベット順に並べ替えた後、登録順に戻したことがあるか
+    key: 'sortNewestAfterAlphabet',
+    thresholds: [1],
+    getCount: () => (STATE.usedNewestSortAfterAlphabet ? 1 : 0),
+    getThresholdLabel: () => t('missionSortNewestAfterAlphabet'),
   },
   {
     // 3日連続でアプリを起動したか
