@@ -1,8 +1,11 @@
 // -------------------------------------------------------------
 // APP CONFIG & STATE
 // -------------------------------------------------------------
+// アプリ全体で共通のOAuthクライアントID（公開して問題ない値。ユーザーごとの個別設定は不要）
+const GOOGLE_OAUTH_CLIENT_ID = '1017755020769-9i4h7g2qgi5q4ipbbntn3fst9a34mct7.apps.googleusercontent.com';
+
 let STATE = {
-  clientId: localStorage.getItem('clientId') || '',
+  clientId: GOOGLE_OAUTH_CLIENT_ID,
   accessToken: localStorage.getItem('accessToken') || '',
   tokenExpiry: parseInt(localStorage.getItem('tokenExpiry') || '0', 10),
   folderId: localStorage.getItem('folderId') || '',
@@ -63,7 +66,6 @@ const I18N = {
   ja: {
     pageTitle: 'Cardvalia',
     btnLogin: 'Google アカウントでサインイン',
-    btnOpenSetup: '初期設定 (OAuth クライアントID)',
     authDescIntro: 'Cardvaliaは、いただいた名刺をご自身のGoogleドライブだけで管理できる、名刺管理アプリです。',
     authDescFeature1: '名刺の登録・検索・タグ管理ができます',
     authDescFeature2: 'データはすべて、ご自身のGoogleドライブ内の選択したフォルダに保存されます（開発者のサーバーには一切保存されません）',
@@ -141,10 +143,6 @@ const I18N = {
     submitEdit: '変更を保存',
 
     headingSettings: 'アプリ設定',
-    headingOAuth: 'Google API 認証設定',
-    oauthDesc: 'Google Driveへアクセスするため、ご自身の Google Cloud Console で作成したOAuthクライアントIDを入力してください。',
-    labelClientId: 'OAuth クライアントID',
-    btnSaveSettings: '設定を保存',
     headingAccount: 'アカウント',
     notSignedIn: '未サインイン',
     btnLogout: 'ログアウト',
@@ -264,7 +262,6 @@ const I18N = {
     loadingSavingNew: 'Googleドライブに保存中...',
     loadingSavingEdit: '変更を保存中...',
 
-    toastSetupFirst: 'はじめに「初期設定」からOAuthクライアントIDを登録してください。',
     toastAuthSuccess: 'Google認証に成功しました。',
     toastAuthError: '認証エラー: {error}',
     toastGoogleLibError: 'Google API ライブラリの初期化に失敗しました。時間をおいて再度お試しください。',
@@ -281,8 +278,6 @@ const I18N = {
     toastUpdateError: '更新中にエラーが発生しました',
     toastDeleted: '名刺を削除しました',
     toastDeleteError: '削除中にエラーが発生しました',
-    toastClientIdRequired: 'クライアントIDを入力してください',
-    toastSettingsSaved: '設定を保存しました',
     toastNoCardsForKassen: '名刺が登録されていません',
     toastCardNotFound: '名刺が見つかりませんでした',
     userNoName: 'ユーザー名なし'
@@ -290,7 +285,6 @@ const I18N = {
   en: {
     pageTitle: 'Cardvalia',
     btnLogin: 'Sign in with Google',
-    btnOpenSetup: 'Initial Setup (OAuth Client ID)',
     authDescIntro: 'Cardvalia is a business card manager that stores everything in your own Google Drive.',
     authDescFeature1: 'Register, search, and tag your business cards',
     authDescFeature2: "All data is saved to a folder you choose in your own Google Drive — the developer's servers never store it",
@@ -368,10 +362,6 @@ const I18N = {
     submitEdit: 'Save Changes',
 
     headingSettings: 'Settings',
-    headingOAuth: 'Google API Authentication',
-    oauthDesc: 'To access Google Drive, enter the OAuth Client ID you created in your own Google Cloud Console.',
-    labelClientId: 'OAuth Client ID',
-    btnSaveSettings: 'Save Settings',
     headingAccount: 'Account',
     notSignedIn: 'Not signed in',
     btnLogout: 'Sign Out',
@@ -491,7 +481,6 @@ const I18N = {
     loadingSavingNew: 'Saving to Google Drive...',
     loadingSavingEdit: 'Saving changes...',
 
-    toastSetupFirst: 'First, register your OAuth Client ID from "Initial Setup".',
     toastAuthSuccess: 'Signed in with Google successfully.',
     toastAuthError: 'Authentication error: {error}',
     toastGoogleLibError: 'Failed to initialize the Google API library. Please try again later.',
@@ -508,8 +497,6 @@ const I18N = {
     toastUpdateError: 'An error occurred while updating',
     toastDeleted: 'Business card deleted',
     toastDeleteError: 'An error occurred while deleting',
-    toastClientIdRequired: 'Please enter a Client ID',
-    toastSettingsSaved: 'Settings saved',
     toastNoCardsForKassen: 'No business cards are registered',
     toastCardNotFound: 'Business card not found',
     userNoName: 'No name'
@@ -594,7 +581,6 @@ const elements = {
   screenMissions: document.getElementById('screen-missions'),
   // Auth Screen
   btnLogin: document.getElementById('btn-login'),
-  btnOpenSetup: document.getElementById('btn-open-setup'),
   // Main Screen
   btnSync: document.getElementById('btn-sync'),
   btnAddCard: document.getElementById('btn-add-card'),
@@ -634,8 +620,6 @@ const elements = {
   btnSubmitText: document.getElementById('btn-submit-text'),
   addScreenTitle: document.getElementById('add-screen-title'),
   // Settings Screen
-  inputClientId: document.getElementById('input-client-id'),
-  btnSaveSettings: document.getElementById('btn-save-settings'),
   btnCloseSettings: document.getElementById('btn-close-settings'),
   userName: document.getElementById('user-name'),
   userEmail: document.getElementById('user-email'),
@@ -725,11 +709,7 @@ function initApp() {
   // イベントリスナーの登録
   registerEventListeners();
 
-  // 設定画面に保存済みのクライアントIDをセット
-  if (STATE.clientId) {
-    elements.inputClientId.value = STATE.clientId;
-    initGoogleAuth();
-  }
+  initGoogleAuth();
 
   // セッション有効性のチェック
   checkSession();
@@ -853,12 +833,6 @@ function initGoogleAuth() {
 }
 
 function handleLogin() {
-  if (!STATE.clientId) {
-    showToast(t('toastSetupFirst'));
-    showScreen('screen-settings');
-    return;
-  }
-
   showLoading(t('loadingSigningIn'));
   if (!STATE.tokenClient) {
     initGoogleAuth();
@@ -1593,10 +1567,6 @@ async function openEditCard(cardId) {
 function registerEventListeners() {
   // サインイン画面
   elements.btnLogin.addEventListener('click', handleLogin);
-  elements.btnOpenSetup.addEventListener('click', () => {
-    elements.inputClientId.value = STATE.clientId;
-    showScreen('screen-settings');
-  });
 
   // メイン画面ヘッダー
   elements.btnSync.addEventListener('click', syncWithDrive);
@@ -1698,27 +1668,6 @@ function registerEventListeners() {
 
   // 新規登録：送信
   elements.formAddCard.addEventListener('submit', handleAddCardSubmit);
-
-  // 設定：保存
-  elements.btnSaveSettings.addEventListener('click', () => {
-    const newId = elements.inputClientId.value.trim();
-    if (!newId) {
-      showToast(t('toastClientIdRequired'));
-      return;
-    }
-
-    const idChanged = STATE.clientId !== newId;
-    STATE.clientId = newId;
-    localStorage.setItem('clientId', STATE.clientId);
-
-    showToast(t('toastSettingsSaved'));
-    
-    if (idChanged) {
-      initGoogleAuth();
-    }
-    
-    checkSession();
-  });
 
   // 設定：閉じる
   elements.btnCloseSettings.addEventListener('click', () => {

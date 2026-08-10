@@ -33,7 +33,7 @@
       <div class="auth-card glass">
         <div class="auth-logo">
           <div class="logo-icon-wrapper">
-            <img src="icon.svg" alt="" class="logo-icon-img">
+            <img src="icon-512.png" alt="" class="logo-icon-img">
           </div>
           <h1>Cardvalia</h1>
           <p class="app-subtitle">Biz-Card Showdown</p>
@@ -53,11 +53,6 @@
             <i data-lucide="log-in"></i>
             <span data-i18n="btnLogin">Google アカウントでサインイン</span>
           </button>
-
-          <button id="btn-open-setup" class="btn btn-text">
-            <i data-lucide="settings"></i>
-            <span data-i18n="btnOpenSetup">初期設定 (OAuth クライアントID)</span>
-          </button>
         </div>
 
         <a href="privacy.html" class="auth-privacy-link" data-i18n="linkPrivacyPolicy">プライバシーポリシー</a>
@@ -70,7 +65,7 @@
       <header class="main-header glass">
         <div class="header-top">
           <div class="app-title">
-            <img src="icon.svg" alt="" class="app-title-icon">
+            <img src="icon-512.png" alt="" class="app-title-icon">
             <span>Cardvalia</span>
           </div>
           <div class="header-actions">
@@ -253,18 +248,6 @@
               <button type="button" class="lang-switch-btn" data-lang="ja">日本語</button>
               <button type="button" class="lang-switch-btn" data-lang="en">English</button>
             </div>
-          </div>
-
-          <div class="settings-section glass-card">
-            <h3 data-i18n="headingOAuth">Google API 認証設定</h3>
-            <p class="section-desc" data-i18n="oauthDesc">Google Driveへアクセスするため、ご自身の Google Cloud Console で作成したOAuthクライアントIDを入力してください。</p>
-
-            <div class="form-group">
-              <label for="input-client-id" data-i18n="labelClientId">OAuth クライアントID</label>
-              <input type="text" id="input-client-id" placeholder="xxxx-xxxx.apps.googleusercontent.com">
-            </div>
-
-            <button id="btn-save-settings" class="btn btn-primary" data-i18n="btnSaveSettings">設定を保存</button>
           </div>
 
           <div class="settings-section glass-card">
