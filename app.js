@@ -39,6 +39,11 @@ let STATE = {
   // 並べ替えミッション用の記録（いずれもGoogle Driveに保存）
   usedAlphabetSort: false,          // 一度でもアルファベット順に並べ替えたか
   usedNewestSortAfterAlphabet: false, // アルファベット順に並べ替えた後、登録順に戻したことがあるか
+  duelView: 'match',  // デュエルモード画面内の表示切り替え（'match' or 'ranking'）
+  duelBattleCount: 0, // これまでのデュエル数（Google Driveに保存）
+  // 現在の対戦セッション（画面を開くたびにリセットされる一時状態。Google Driveには保存しない）
+  // netScore: -3(右が押し切って勝利)〜+3(左が押し切って勝利)。押し合いなので、相手に押し返されると相殺される
+  duel: { left: null, right: null, netScore: 0, winner: null, inProgress: false },
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -60,6 +65,7 @@ const I18N = {
     titleSync: '同期',
     titleAdd: '新規登録',
     titleKassen: '合戦モード',
+    titleDuel: 'デュエルモード',
     titleMissions: 'ミッション',
     headingMissions: 'ミッション',
     missionThreshold: '{count}枚登録',
@@ -69,6 +75,10 @@ const I18N = {
     missionMaxTagsOnCard: '{count}つのタグを持った名刺を登録',
     missionThresholdTagBattles: 'タグモードで{count}回合戦',
     missionThresholdInitialBattles: 'イニシャルモードで{count}回合戦',
+    missionThresholdDuelBattles: 'デュエルで{count}回対戦',
+    missionMaxPointsTag: 'タグモードで{count}pt達成の名刺が出現',
+    missionMaxPointsInitial: 'イニシャルモードで{count}pt達成の名刺が出現',
+    missionMaxPointsDuel: 'デュエルで{count}pt達成の名刺が出現',
     missionHexCount100: 'マップのヘックス総数100個達成',
     missionIslandDetected: 'マップに孤島が発生',
     missionAlphabetCount: 'イニシャル{count}文字制覇',
@@ -79,11 +89,12 @@ const I18N = {
     missionLaunchStreak3: '3日連続アプリ起動',
     missionReturnAfterGap3: '3日振りにアプリ起動',
     missionCompleteAll: '全てのミッションをコンプリート',
-    missionThanks: 'ありがとう！',
+    missionThanks: 'たくさん使ってくれてありがとう！',
     missionAchieved: '達成済み',
     missionMystery: '？？？',
     missionLocked: '名刺を登録して解放しよう',
     missionLockedBattle: '合戦をして解放しよう',
+    missionLockedDuel: 'デュエルをして解放しよう',
     titleSettings: '設定',
     titleSortNewest: '並べ替え：登録が新しい順',
     titleSortAlphabet: '並べ替え：アルファベット順',
@@ -173,6 +184,56 @@ const I18N = {
       '【{team}】ここで{team}が脱落。{name}、お疲れ様でした…'
     ],
 
+    headingDuel: 'デュエルモード',
+    titleDuelRanking: 'ランキング',
+    headingDuelRanking: 'デュエルポイントランキング',
+    duelRankingEmpty: 'まだポイントが入っていません',
+    duelRankingCount: '{count}pt',
+    duelEmptyNotEnoughCards: '対戦させるには名刺が2枚以上必要です',
+    btnStartDuel: 'デュエル開始',
+    btnDuelReselect: '対戦相手再選択',
+    duelOpening: 'デュエル開始…！',
+    duelResultBadge: '🏆 {name}の勝利！',
+    duelWinnerLabel: '勝者',
+    duelBattleCountLabel: 'これまでのデュエル数: {count}回',
+    duelNormalTemplates: [
+      '{name}の華麗なステップ！',
+      '{name}、キラリと光る一瞬のひらめき！',
+      '{name}が繰り出す、優雅な一手！',
+      '{name}の不思議な魅力に場がどよめく！',
+      '{name}、涼しい顔でポイントを重ねる！',
+      '{name}のスマイル一発！',
+      '{name}、くるりと華麗なターン！',
+      '{name}の瞳がキラリと輝く！',
+      '{name}、風のように涼しく一歩前へ！',
+      '{name}が魅せる、鮮やかな身のこなし！',
+      '{name}のウインク一発、場内騒然！',
+      '{name}、まるで舞うような身のこなし！',
+      '{name}が繰り出す、軽やかなフェイント！',
+      '{name}の指先ひとつで場の空気が変わる！',
+      '{name}、静かな自信を漂わせる一手！',
+      '{name}が魅せる、鮮烈なポーズ！',
+      '{name}のさりげない一言に、どよめきが起こる！',
+      '{name}、余裕の笑みでリズムを刻む！'
+    ],
+    duelSpecialTemplates: [
+      '✨ {name}の必殺技「テレポート」炸裂！',
+      '✨ {name}、渾身の超能力！',
+      '✨ {name}が時を止めた…！',
+      '✨ {name}の必殺技、決まった！',
+      '✨ {name}、華麗なる大逆転の一手！',
+      '✨ {name}、異次元へのワープ！',
+      '✨ {name}の瞳が七色に輝く…！',
+      '✨ {name}、空間を歪めた…！',
+      '✨ {name}の必殺技「幻影ステップ」発動！',
+      '✨ {name}、周囲の時間を操った…！',
+      '✨ {name}が奇跡を呼び込んだ！',
+      '✨ {name}の必殺技「星屑の舞」炸裂！',
+      '✨ {name}、運命すら味方につけた…！',
+      '✨ {name}の渾身の一手、場を揺るがす！',
+      '✨ {name}、伝説の一手を繰り出した！'
+    ],
+
     loadingDefault: '読み込み中...',
     loadingSigningIn: 'Googleでサインイン中...',
     loadingSyncing: 'Googleドライブと同期中...',
@@ -212,6 +273,7 @@ const I18N = {
     titleSync: 'Sync',
     titleAdd: 'Add Card',
     titleKassen: 'Showdown Mode',
+    titleDuel: 'Duel Mode',
     titleMissions: 'Missions',
     headingMissions: 'Missions',
     missionThreshold: '{count}-card milestone',
@@ -221,6 +283,10 @@ const I18N = {
     missionMaxTagsOnCard: 'Register a card with {count}+ tags',
     missionThresholdTagBattles: '{count} Tag Mode battles',
     missionThresholdInitialBattles: '{count} Initial Mode battles',
+    missionThresholdDuelBattles: '{count} Duel Mode matches',
+    missionMaxPointsTag: 'A card reaches {count}pt in Tag Mode',
+    missionMaxPointsInitial: 'A card reaches {count}pt in Initial Mode',
+    missionMaxPointsDuel: 'A card reaches {count}pt in Duel Mode',
     missionHexCount100: 'Reach 100 hexes on the map',
     missionIslandDetected: 'An island appeared on the map',
     missionAlphabetCount: 'Conquer {count} initials',
@@ -231,11 +297,12 @@ const I18N = {
     missionLaunchStreak3: 'Open the app 3 days in a row',
     missionReturnAfterGap3: 'Come back after 3+ days away',
     missionCompleteAll: 'Complete All Missions',
-    missionThanks: 'Thank you!',
+    missionThanks: 'Thanks for using the app so much!',
     missionAchieved: 'Achieved',
     missionMystery: '???',
     missionLocked: 'Keep adding cards to unlock',
     missionLockedBattle: 'Fight a Showdown to unlock',
+    missionLockedDuel: 'Fight a Duel to unlock',
     titleSettings: 'Settings',
     titleSortNewest: 'Sort: Newest first',
     titleSortAlphabet: 'Sort: Alphabetical',
@@ -323,6 +390,56 @@ const I18N = {
       '[{team}] {name} fought hard but was eliminated...',
       '[{team}] {name} put up a struggle, but it was not enough...',
       '[{team}] {team} has fallen here. Well fought, {name}...'
+    ],
+
+    headingDuel: 'Duel Mode',
+    titleDuelRanking: 'Ranking',
+    headingDuelRanking: 'Duel Point Ranking',
+    duelRankingEmpty: 'No points yet',
+    duelRankingCount: '{count}pt',
+    duelEmptyNotEnoughCards: 'You need at least 2 cards to duel',
+    btnStartDuel: 'Start Duel',
+    btnDuelReselect: 'Reselect Opponents',
+    duelOpening: 'Duel start...!',
+    duelResultBadge: '🏆 {name} wins!',
+    duelWinnerLabel: 'Winner',
+    duelBattleCountLabel: 'Duels so far: {count}',
+    duelNormalTemplates: [
+      "{name}'s graceful step!",
+      '{name} flashes a dazzling wink!',
+      '{name} makes an elegant move!',
+      "The crowd gasps at {name}'s mysterious charm!",
+      '{name} calmly scores another point!',
+      "{name}'s winning smile lands!",
+      '{name} spins with elegant flair!',
+      "{name}'s eyes sparkle with mischief!",
+      '{name} glides forward like the wind!',
+      '{name} shows off a dazzling bit of footwork!',
+      "{name}'s wink sends the crowd into a frenzy!",
+      '{name} moves as if dancing on air!',
+      '{name} slips in a light feint!',
+      "{name}'s fingertip shifts the mood of the room!",
+      '{name} exudes quiet confidence!',
+      '{name} strikes a striking pose!',
+      "{name}'s offhand remark draws gasps!",
+      '{name} keeps the rhythm with an easy smile!'
+    ],
+    duelSpecialTemplates: [
+      '✨ {name} unleashes a finishing move: Teleport!',
+      '✨ {name} channels incredible psychic power!',
+      '✨ {name} stops time itself...!',
+      "✨ {name}'s finishing move connects!",
+      '✨ {name} pulls off a stunning comeback!',
+      '✨ {name} warps into another dimension!',
+      "✨ {name}'s eyes shimmer with every color...!",
+      '✨ {name} bends space itself...!',
+      '✨ {name} unleashes the finishing move: Phantom Step!',
+      '✨ {name} commands the flow of time...!',
+      '✨ {name} summons a miracle!',
+      '✨ {name} unleashes the finishing move: Stardust Dance!',
+      '✨ {name} bends fate to their will...!',
+      "✨ {name}'s all-out strike shakes the arena!",
+      '✨ {name} pulls off a legendary move!'
     ],
 
     loadingDefault: 'Loading...',
@@ -514,6 +631,28 @@ const elements = {
   kassenCommentaryText: document.getElementById('kassen-commentary-text'),
   btnSkipKassen: document.getElementById('btn-skip-kassen'),
   kassenResult: document.getElementById('kassen-result'),
+  // Duel Mode Screen（デュエルモード）
+  btnDuel: document.getElementById('btn-duel'),
+  btnCloseDuel: document.getElementById('btn-close-duel'),
+  btnDuelRanking: document.getElementById('btn-duel-ranking'),
+  duelRankingView: document.getElementById('duel-ranking-view'),
+  duelRankingList: document.getElementById('duel-ranking-list'),
+  btnCloseDuelRanking: document.getElementById('btn-close-duel-ranking'),
+  duelEmptyState: document.getElementById('duel-empty-state'),
+  duelMatch: document.getElementById('duel-match'),
+  duelLeftImageWrapper: document.getElementById('duel-left-image-wrapper'),
+  duelLeftName: document.getElementById('duel-left-name'),
+  duelRightImageWrapper: document.getElementById('duel-right-image-wrapper'),
+  duelRightName: document.getElementById('duel-right-name'),
+  duelBarFillLeft: document.getElementById('duel-bar-fill-left'),
+  duelBarFillRight: document.getElementById('duel-bar-fill-right'),
+  duelBarMarker: document.getElementById('duel-bar-marker'),
+  duelCommentary: document.getElementById('duel-commentary'),
+  duelCommentaryText: document.getElementById('duel-commentary-text'),
+  btnStartDuel: document.getElementById('btn-start-duel'),
+  btnDuelReselect: document.getElementById('btn-duel-reselect'),
+  duelResult: document.getElementById('duel-result'),
+  duelBattleCount: document.getElementById('duel-battle-count'),
   // Common UI
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
@@ -826,7 +965,7 @@ async function getOrCreateMetadataFileId() {
 
   const boundary = 'foo_bar_baz';
   const metadataPart = JSON.stringify(fileMetadata);
-  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false }); // 空の名刺リスト
+  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false, duelBattleCount: 0 }); // 空の名刺リスト
 
   const multipartBody = 
     `\r\n--${boundary}\r\n` +
@@ -865,6 +1004,7 @@ async function loadMetadata() {
       STATE.returnAfterGapDetected = false;
       STATE.usedAlphabetSort = false;
       STATE.usedNewestSortAfterAlphabet = false;
+      STATE.duelBattleCount = 0;
     } else {
       STATE.cards = data.cards || [];
       STATE.kassenBattleCount = normalizeKassenBattleCount(data.kassenBattleCount);
@@ -875,6 +1015,7 @@ async function loadMetadata() {
       STATE.returnAfterGapDetected = !!data.returnAfterGapDetected;
       STATE.usedAlphabetSort = !!data.usedAlphabetSort;
       STATE.usedNewestSortAfterAlphabet = !!data.usedNewestSortAfterAlphabet;
+      STATE.duelBattleCount = data.duelBattleCount || 0;
     }
   } else {
     throw new Error('Failed to load metadata');
@@ -912,6 +1053,7 @@ async function saveMetadata() {
       returnAfterGapDetected: STATE.returnAfterGapDetected,
       usedAlphabetSort: STATE.usedAlphabetSort,
       usedNewestSortAfterAlphabet: STATE.usedNewestSortAfterAlphabet,
+      duelBattleCount: STATE.duelBattleCount,
     })
   });
   return res.ok;
@@ -1591,6 +1733,30 @@ function registerEventListeners() {
     kassenSkipRequested = true;
     if (kassenSkipResolver) kassenSkipResolver();
   });
+
+  // デュエルモード：開く・閉じる
+  elements.btnDuel.addEventListener('click', openDuelMode);
+  elements.btnCloseDuel.addEventListener('click', () => {
+    showScreen('screen-main');
+    updateMissionsGlow();
+  });
+
+  // デュエルモード：ランキング表示の切り替え（トグル）
+  elements.btnDuelRanking.addEventListener('click', () => {
+    showDuelView(STATE.duelView === 'ranking' ? 'match' : 'ranking');
+  });
+  elements.btnCloseDuelRanking.addEventListener('click', () => {
+    showDuelView('match');
+  });
+  elements.duelRankingList.addEventListener('click', (e) => {
+    const item = e.target.closest('.kassen-ranking-item');
+    if (!item) return;
+    goToCardFromKassen(item.dataset.id);
+  });
+
+  // デュエルモード：デュエル開始・対戦相手再選択
+  elements.btnStartDuel.addEventListener('click', startDuel);
+  elements.btnDuelReselect.addEventListener('click', spinDuelSlotMachine);
 }
 
 function resetAddForm() {
@@ -1888,17 +2054,48 @@ const MISSION_BASE_CATEGORIES = [
   },
   {
     key: 'tagBattles',
-    thresholds: [1, 5, 10, 25, 50, 100],
+    thresholds: [1, 5, 10, 25, 50],
     getCount: () => getKassenBattleCount('tag'),
     getThresholdLabel: threshold => t('missionThresholdTagBattles', { count: threshold }),
     lockedStatusKey: 'missionLockedBattle',
   },
   {
+    // タグモードで、最もポイントを稼いだ名刺のポイント数
+    key: 'tagMaxPoints',
+    thresholds: [10, 20],
+    getCount: () => STATE.cards.reduce((max, card) => Math.max(max, getCardMvpCount(card, 'tag')), 0),
+    getThresholdLabel: threshold => t('missionMaxPointsTag', { count: threshold }),
+    lockedStatusKey: 'missionLockedBattle',
+  },
+  {
     key: 'initialBattles',
-    thresholds: [1, 5, 10, 25, 50, 100],
+    thresholds: [1, 5, 10, 25, 50],
     getCount: () => getKassenBattleCount('initial'),
     getThresholdLabel: threshold => t('missionThresholdInitialBattles', { count: threshold }),
     lockedStatusKey: 'missionLockedBattle',
+  },
+  {
+    // イニシャルモードで、最もポイントを稼いだ名刺のポイント数
+    key: 'initialMaxPoints',
+    thresholds: [10, 20],
+    getCount: () => STATE.cards.reduce((max, card) => Math.max(max, getCardMvpCount(card, 'initial')), 0),
+    getThresholdLabel: threshold => t('missionMaxPointsInitial', { count: threshold }),
+    lockedStatusKey: 'missionLockedBattle',
+  },
+  {
+    key: 'duelBattles',
+    thresholds: [1, 5, 10, 25, 50],
+    getCount: () => STATE.duelBattleCount || 0,
+    getThresholdLabel: threshold => t('missionThresholdDuelBattles', { count: threshold }),
+    lockedStatusKey: 'missionLockedDuel',
+  },
+  {
+    // デュエルモードで、最もポイントを稼いだ名刺のポイント数
+    key: 'duelMaxPoints',
+    thresholds: [10, 20],
+    getCount: () => STATE.cards.reduce((max, card) => Math.max(max, getCardDuelPoints(card)), 0),
+    getThresholdLabel: threshold => t('missionMaxPointsDuel', { count: threshold }),
+    lockedStatusKey: 'missionLockedDuel',
   },
   {
     // タグモードの地図上のヘックス総数（複数タグ持ちの名刺は複数ヘックスとしてカウントされる）
@@ -2812,6 +3009,276 @@ function goToCardFromKassen(cardId) {
   } else {
     showToast(t('toastCardNotFound'));
   }
+}
+
+// -------------------------------------------------------------
+// DUEL MODE（ランダムな2枚の名刺を1対1で対戦させる）
+// -------------------------------------------------------------
+function duelSleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// card.duelWinCount はデュエル勝利「回数」ではなく、獲得ポイントの累計値（pt）を保持する
+function getCardDuelPoints(card) {
+  return card.duelWinCount || 0;
+}
+
+// 通常は+1pt、10回記念大会（デュエル数が10の倍数）は+5pt、100回記念大会（100の倍数）は+10pt
+function incrementCardDuelPoints(card, points = 1) {
+  card.duelWinCount = (card.duelWinCount || 0) + points;
+}
+
+function updateDuelBattleCountDisplay() {
+  elements.duelBattleCount.textContent = t('duelBattleCountLabel', { count: STATE.duelBattleCount || 0 });
+}
+
+// 通算ポイントの降順（同ポイントなら登録年月が古い方、さらに同じならアルファベット順）でランキングを算出する。
+// 未獲得（0pt）の名刺はランキング対象外で、上位20名まで表示する。
+function getDuelRanking() {
+  return STATE.cards
+    .filter(card => getCardDuelPoints(card) >= 1)
+    .slice()
+    .sort((a, b) => {
+      const countDiff = getCardDuelPoints(b) - getCardDuelPoints(a);
+      if (countDiff !== 0) return countDiff;
+
+      const monthA = getCardRegisteredMonth(a);
+      const monthB = getCardRegisteredMonth(b);
+      if (monthA !== monthB) return monthA.localeCompare(monthB);
+
+      return (a.alphabet || '').localeCompare(b.alphabet || '', undefined, { sensitivity: 'base' });
+    })
+    .slice(0, 20);
+}
+
+function renderDuelRanking() {
+  const ranking = getDuelRanking();
+
+  if (ranking.length === 0) {
+    elements.duelRankingList.innerHTML = `<p class="kassen-ranking-empty">${t('duelRankingEmpty')}</p>`;
+    return;
+  }
+
+  elements.duelRankingList.innerHTML = ranking.map((card, i) => {
+    const rank = i + 1;
+    return `
+      <button type="button" class="kassen-ranking-item rank-${rank}" data-id="${card.id}">
+        <span class="kassen-ranking-rank">${rank === 1 ? '<i data-lucide="crown"></i>' : rank}</span>
+        <span class="kassen-ranking-info">
+          <span class="kassen-ranking-name">${escapeHTML(card.name)}</span>
+          <span class="kassen-ranking-alphabet">${escapeHTML(card.alphabet)}</span>
+        </span>
+        <span class="kassen-ranking-count">${t('duelRankingCount', { count: getCardDuelPoints(card) })}</span>
+      </button>
+    `;
+  }).join('');
+  lucide.createIcons();
+}
+
+// デュエルモード画面内の表示切り替え（'match' = 対戦画面, 'ranking' = ランキング）
+function showDuelView(view) {
+  STATE.duelView = view;
+  const isRanking = view === 'ranking';
+  const notEnoughCards = STATE.cards.length < 2;
+
+  elements.duelRankingView.classList.toggle('hidden', !isRanking);
+  elements.duelEmptyState.classList.toggle('hidden', isRanking || !notEnoughCards);
+  elements.duelMatch.classList.toggle('hidden', isRanking || notEnoughCards);
+
+  if (isRanking) {
+    renderDuelRanking();
+  }
+
+  elements.btnDuelRanking.classList.toggle('active', isRanking);
+}
+
+function openDuelMode() {
+  showDuelView('match');
+  updateDuelBattleCountDisplay();
+  showScreen('screen-duel');
+  if (STATE.cards.length >= 2) spinDuelSlotMachine();
+}
+
+function setDuelControlsDisabled(disabled) {
+  elements.btnDuelReselect.disabled = disabled;
+  elements.btnCloseDuel.disabled = disabled;
+}
+
+// 対戦相手候補から重複しない2枚をランダムに選ぶ
+function pickTwoRandomCards() {
+  if (STATE.cards.length < 2) return null;
+  const idx1 = Math.floor(Math.random() * STATE.cards.length);
+  let idx2 = Math.floor(Math.random() * (STATE.cards.length - 1));
+  if (idx2 >= idx1) idx2 += 1;
+  return [STATE.cards[idx1], STATE.cards[idx2]];
+}
+
+// スロットマシンのように候補をめまぐるしく切り替えた後、最終的な対戦相手2枚に着地する
+function renderDuelFighterSpinning(side, card) {
+  const nameEl = side === 'left' ? elements.duelLeftName : elements.duelRightName;
+  const imageWrapper = side === 'left' ? elements.duelLeftImageWrapper : elements.duelRightImageWrapper;
+  nameEl.textContent = card.name;
+  imageWrapper.innerHTML = '<i data-lucide="user"></i>';
+  lucide.createIcons();
+}
+
+async function renderDuelFighterFinal(side, card) {
+  renderDuelFighterSpinning(side, card);
+  if (card.imageId) {
+    const imageUrl = await fetchCardImage(card.imageId);
+    if (imageUrl) {
+      const imageWrapper = side === 'left' ? elements.duelLeftImageWrapper : elements.duelRightImageWrapper;
+      imageWrapper.innerHTML = `<img src="${imageUrl}" alt="${escapeHTML(card.name)}">`;
+    }
+  }
+}
+
+function resetDuelBar() {
+  STATE.duel.netScore = 0;
+  updateDuelBar();
+}
+
+// バーは常に左＝青／右＝赤で塗り分けられ、境目がその時点の形勢を示す（開始時は50:50）。
+// 押し切られると境目が端まで達し、勝った側の色一色になる
+function updateDuelBar() {
+  const net = STATE.duel.netScore; // -3(右の勝利)〜+3(左の勝利)
+  const percent = Math.max(0, Math.min(100, 50 + (net / 3) * 50));
+  elements.duelBarFillLeft.style.width = `${percent}%`;
+  elements.duelBarFillRight.style.width = `${100 - percent}%`;
+  elements.duelBarMarker.style.left = `${percent}%`;
+}
+
+async function spinDuelSlotMachine() {
+  if (STATE.cards.length < 2) {
+    showDuelView('match');
+    return;
+  }
+  elements.duelEmptyState.classList.add('hidden');
+  elements.duelMatch.classList.remove('hidden');
+
+  STATE.duel.inProgress = true;
+  setDuelControlsDisabled(true);
+  elements.btnStartDuel.disabled = true;
+  elements.duelResult.classList.add('hidden');
+  elements.duelResult.innerHTML = '';
+  STATE.duel.winner = null;
+  resetDuelBar();
+
+  const spins = 12;
+  for (let i = 0; i < spins; i++) {
+    const [c1, c2] = pickTwoRandomCards();
+    renderDuelFighterSpinning('left', c1);
+    renderDuelFighterSpinning('right', c2);
+    await duelSleep(60 + i * 12);
+  }
+
+  const [finalLeft, finalRight] = pickTwoRandomCards();
+  STATE.duel.left = finalLeft;
+  STATE.duel.right = finalRight;
+  await Promise.all([
+    renderDuelFighterFinal('left', finalLeft),
+    renderDuelFighterFinal('right', finalRight),
+  ]);
+  resetDuelBar();
+
+  STATE.duel.inProgress = false;
+  setDuelControlsDisabled(false);
+  elements.btnStartDuel.disabled = false;
+  elements.btnStartDuel.classList.remove('hidden');
+}
+
+async function showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel) {
+  elements.duelResult.innerHTML = `
+    <div class="kassen-result-card glass-card">
+      <div class="kassen-result-badge">${t('duelResultBadge', { name: escapeHTML(winnerCard.name) })}</div>
+      ${isCentennialDuel ? `<div class="kassen-anniversary-badge kassen-centennial-badge">${t('kassenCentennialLabel')}</div>` : ''}
+      ${isAnniversaryDuel ? `<div class="kassen-anniversary-badge">${t('kassenAnniversaryLabel')}</div>` : ''}
+      <button type="button" id="duel-winner-link" class="kassen-mvp kassen-mvp-clickable" title="${t('kassenMvpTitle')}">
+        <div class="kassen-mvp-image-wrapper">
+          <i data-lucide="user"></i>
+        </div>
+        <div class="kassen-mvp-info">
+          <span class="kassen-mvp-label">${t('duelWinnerLabel')}</span>
+          <h3>${escapeHTML(winnerCard.name)}</h3>
+          <div class="alphabet">${escapeHTML(winnerCard.alphabet)}</div>
+        </div>
+        <span class="kassen-mvp-points${(isAnniversaryDuel || isCentennialDuel) ? ' kassen-mvp-points-bonus' : ''}">+${points}pt</span>
+        <i data-lucide="chevron-right" class="kassen-mvp-arrow"></i>
+      </button>
+    </div>
+  `;
+  elements.duelResult.classList.remove('hidden');
+  lucide.createIcons();
+
+  if (winnerCard.imageId) {
+    const imageUrl = await fetchCardImage(winnerCard.imageId);
+    if (imageUrl) {
+      const imgWrapper = document.querySelector('#duel-result .kassen-mvp-image-wrapper');
+      if (imgWrapper) imgWrapper.innerHTML = `<img src="${imageUrl}" alt="${escapeHTML(winnerCard.name)}">`;
+    }
+  }
+
+  const winnerLink = document.getElementById('duel-winner-link');
+  if (winnerLink) {
+    winnerLink.addEventListener('click', () => goToCardFromKassen(winnerCard.id));
+  }
+}
+
+async function startDuel() {
+  if (STATE.duel.inProgress || !STATE.duel.left || !STATE.duel.right || STATE.duel.winner) return;
+
+  STATE.duel.inProgress = true;
+  elements.btnStartDuel.classList.add('hidden');
+  setDuelControlsDisabled(true);
+
+  // これまでのデュエル数をカウント。100の倍数は「100回記念大会」（+10pt）、
+  // 10の倍数（100の倍数を除く）は「10回記念大会」（+5pt）
+  STATE.duelBattleCount = (STATE.duelBattleCount || 0) + 1;
+  const battleNumber = STATE.duelBattleCount;
+  const isCentennialDuel = battleNumber % 100 === 0;
+  const isAnniversaryDuel = !isCentennialDuel && battleNumber % 10 === 0;
+  updateDuelBattleCountDisplay();
+
+  elements.duelCommentaryText.textContent = t('duelOpening');
+  elements.duelCommentary.classList.remove('hidden');
+  await duelSleep(700);
+
+  // 押し合い（相手に押し返されると相殺される）。どちらかがバーの端まで押し切ったら勝利。
+  // まれに「必殺技」が発動し、一気に2つ押し込む
+  while (Math.abs(STATE.duel.netScore) < 3) {
+    const direction = Math.random() < 0.5 ? 1 : -1; // +1 = 左が押す, -1 = 右が押す
+    const isSpecialMove = Math.random() < 0.2;
+    const magnitude = isSpecialMove ? 2 : 1;
+    const actingCard = direction > 0 ? STATE.duel.left : STATE.duel.right;
+
+    const templates = t(isSpecialMove ? 'duelSpecialTemplates' : 'duelNormalTemplates');
+    const template = templates[Math.floor(Math.random() * templates.length)];
+    elements.duelCommentaryText.textContent = template.replace(/\{name\}/g, actingCard.name);
+
+    STATE.duel.netScore = Math.max(-3, Math.min(3, STATE.duel.netScore + direction * magnitude));
+    updateDuelBar();
+
+    await duelSleep(1300);
+  }
+
+  elements.duelCommentary.classList.add('hidden');
+
+  const winnerSide = STATE.duel.netScore >= 3 ? 'left' : 'right';
+  const winnerCard = winnerSide === 'left' ? STATE.duel.left : STATE.duel.right;
+  STATE.duel.winner = winnerSide;
+
+  let points = 1;
+  if (isCentennialDuel) points = 10;
+  else if (isAnniversaryDuel) points = 5;
+
+  incrementCardDuelPoints(winnerCard, points);
+  saveMetadata().catch(err => console.error('デュエル結果の保存に失敗しました:', err));
+  if (STATE.duelView === 'ranking') renderDuelRanking();
+
+  await showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel);
+
+  setDuelControlsDisabled(false);
+  STATE.duel.inProgress = false;
 }
 
 // -------------------------------------------------------------

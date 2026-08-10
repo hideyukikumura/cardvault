@@ -62,6 +62,9 @@
             <button id="btn-kassen" class="btn-icon" title="合戦モード" data-i18n-title="titleKassen">
               <i data-lucide="swords"></i>
             </button>
+            <button id="btn-duel" class="btn-icon" title="デュエルモード" data-i18n-title="titleDuel">
+              <i data-lucide="sword"></i>
+            </button>
             <button id="btn-missions" class="btn-icon" title="ミッション" data-i18n-title="titleMissions">
               <i data-lucide="target"></i>
             </button>
@@ -371,6 +374,74 @@
                 <button id="btn-kassen-regenerate-no" class="btn btn-secondary" data-i18n="btnNo">いいえ</button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5.5. DUEL MODE SCREEN (ランダムな2枚の名刺を1対1で対戦させる) -->
+    <section id="screen-duel" class="screen">
+      <div class="screen-content glass-fullscreen">
+        <header class="sub-header">
+          <button id="btn-close-duel" class="btn-back">
+            <i data-lucide="arrow-left"></i>
+          </button>
+          <h2 data-i18n="headingDuel">デュエルモード</h2>
+          <div class="header-actions">
+            <button id="btn-duel-ranking" class="btn-icon" title="ランキング" data-i18n-title="titleDuelRanking">
+              <i data-lucide="trophy"></i>
+            </button>
+          </div>
+        </header>
+
+        <div class="duel-container">
+          <div id="duel-empty-state" class="kassen-empty-state hidden">
+            <i data-lucide="sword"></i>
+            <p data-i18n="duelEmptyNotEnoughCards">対戦させるには名刺が2枚以上必要です</p>
+          </div>
+
+          <div id="duel-match" class="duel-match hidden">
+            <div class="duel-versus">
+              <div class="duel-fighter">
+                <div id="duel-left-image-wrapper" class="duel-fighter-image-wrapper"><i data-lucide="user"></i></div>
+                <div id="duel-left-name" class="duel-fighter-name"></div>
+              </div>
+              <div class="duel-vs-label">VS</div>
+              <div class="duel-fighter">
+                <div id="duel-right-image-wrapper" class="duel-fighter-image-wrapper"><i data-lucide="user"></i></div>
+                <div id="duel-right-name" class="duel-fighter-name"></div>
+              </div>
+            </div>
+
+            <div class="duel-bar-track">
+              <div id="duel-bar-fill-left" class="duel-bar-fill-left"></div>
+              <div id="duel-bar-fill-right" class="duel-bar-fill-right"></div>
+              <div id="duel-bar-marker" class="duel-bar-marker"></div>
+            </div>
+
+            <div id="duel-commentary" class="kassen-commentary hidden">
+              <p id="duel-commentary-text" class="kassen-commentary-text"></p>
+            </div>
+
+            <button id="btn-start-duel" class="btn btn-primary btn-lg btn-block">
+              <i data-lucide="sword"></i>
+              <span data-i18n="btnStartDuel">デュエル開始</span>
+            </button>
+
+            <button id="btn-duel-reselect" class="btn btn-secondary btn-block">
+              <i data-lucide="shuffle"></i>
+              <span data-i18n="btnDuelReselect">対戦相手再選択</span>
+            </button>
+
+            <div id="duel-result" class="duel-result hidden"></div>
+
+            <div id="duel-battle-count" class="kassen-battle-count"></div>
+          </div>
+
+          <div id="duel-ranking-view" class="kassen-ranking-view hidden">
+            <h3 class="kassen-ranking-heading" data-i18n="headingDuelRanking">デュエル勝利数ランキング</h3>
+            <div id="duel-ranking-list" class="kassen-ranking-list"></div>
+            <button id="btn-close-duel-ranking" class="btn btn-secondary btn-block" data-i18n="btnClose">閉じる</button>
           </div>
         </div>
       </div>
