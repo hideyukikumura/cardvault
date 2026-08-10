@@ -18,7 +18,10 @@
 
   <!-- Google Identity Services (GIS) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  
+
+  <!-- Google API Loader (Picker API: ユーザーが保存先フォルダを選択する機能で使用) -->
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -35,6 +38,15 @@
           <p class="app-subtitle">Biz-Card Showdown</p>
         </div>
 
+        <div class="auth-description">
+          <p data-i18n="authDescIntro">Cardvaliaは、いただいた名刺をご自身のGoogleドライブだけで管理できる、名刺管理アプリです。</p>
+          <ul>
+            <li data-i18n="authDescFeature1">名刺の登録・検索・タグ管理ができます</li>
+            <li data-i18n="authDescFeature2">データはすべて、ご自身のGoogleドライブ内の選択したフォルダに保存されます（開発者のサーバーには一切保存されません）</li>
+            <li data-i18n="authDescFeature3">合戦モード・デュエルモードなど、名刺の相手を思い出すための遊び心のある機能もあります</li>
+          </ul>
+        </div>
+
         <div class="auth-actions">
           <button id="btn-login" class="btn btn-primary btn-lg">
             <i data-lucide="log-in"></i>
@@ -46,6 +58,8 @@
             <span data-i18n="btnOpenSetup">初期設定 (OAuth クライアントID)</span>
           </button>
         </div>
+
+        <a href="privacy.html" class="auth-privacy-link" data-i18n="linkPrivacyPolicy">プライバシーポリシー</a>
       </div>
     </section>
 
@@ -272,10 +286,31 @@
           </div>
 
           <div class="settings-section glass-card">
+            <h3 data-i18n="headingStorageFolder">保存先フォルダ</h3>
+            <p class="section-desc" data-i18n="storageFolderDesc">名刺データは、ご自身のGoogleドライブ内で選択したフォルダに保存されます。</p>
+            <div class="folder-info">
+              <i data-lucide="folder"></i>
+              <span id="current-folder-name">-</span>
+            </div>
+            <button id="btn-change-folder" class="btn btn-secondary btn-block">
+              <i data-lucide="folder-open"></i>
+              <span data-i18n="btnChangeFolder">フォルダを変更</span>
+            </button>
+          </div>
+
+          <div class="settings-section glass-card">
             <h3 data-i18n="headingKassenData">合戦データ</h3>
             <button id="btn-reset-kassen-history" class="btn btn-danger btn-block">
               <i data-lucide="rotate-ccw"></i>
               <span data-i18n="btnResetKassenHistory">合戦履歴をリセット</span>
+            </button>
+          </div>
+
+          <div class="settings-section glass-card">
+            <h3 data-i18n="headingDuelData">デュエルデータ</h3>
+            <button id="btn-reset-duel-history" class="btn btn-danger btn-block">
+              <i data-lucide="rotate-ccw"></i>
+              <span data-i18n="btnResetDuelHistory">デュエルデータをリセット</span>
             </button>
           </div>
 
@@ -288,7 +323,7 @@
               </li>
               <li>
                 <span data-i18n="infoStorage">ストレージ</span>
-                <span data-i18n="infoStorageValue">Google ドライブ (BusinessCardManagerApp フォルダ)</span>
+                <span data-i18n="infoStorageValue">Google ドライブ（ご自身で選択したフォルダ）</span>
               </li>
             </ul>
           </div>
@@ -301,6 +336,17 @@
             <div class="confirm-actions">
               <button id="btn-reset-kassen-history-yes" class="btn btn-primary" data-i18n="btnYes">はい</button>
               <button id="btn-reset-kassen-history-no" class="btn btn-secondary" data-i18n="btnNo">いいえ</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- デュエルデータリセットの確認ダイアログ -->
+        <div id="duel-reset-confirm" class="confirm-overlay hidden">
+          <div class="confirm-box glass">
+            <p data-i18n="confirmResetDuelHistory">すべてのデュエルデータをリセットします。よろしいですか？</p>
+            <div class="confirm-actions">
+              <button id="btn-reset-duel-history-yes" class="btn btn-primary" data-i18n="btnYes">はい</button>
+              <button id="btn-reset-duel-history-no" class="btn btn-secondary" data-i18n="btnNo">いいえ</button>
             </div>
           </div>
         </div>

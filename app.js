@@ -6,6 +6,7 @@ let STATE = {
   accessToken: localStorage.getItem('accessToken') || '',
   tokenExpiry: parseInt(localStorage.getItem('tokenExpiry') || '0', 10),
   folderId: localStorage.getItem('folderId') || '',
+  folderName: localStorage.getItem('folderName') || '', // 保存先フォルダの表示名（Pickerで選択した際に取得）
   metadataFileId: localStorage.getItem('metadataFileId') || '',
   cards: [],          // すべての名刺データ
   filteredCards: [],  // 検索・フィルター後の名刺データ
@@ -52,6 +53,8 @@ let STATE = {
 // Google API endpoint constants
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
+// Google Picker API用のAPIキー（HTTPリファラー制限・Picker APIのみに制限済みのため、公開して問題ない）
+const GOOGLE_PICKER_API_KEY = 'AIzaSyC9UqDIBywV5jYaT_qjLwB0iEPXXt7SfKM';
 
 // -------------------------------------------------------------
 // I18N（UIの表示言語のみ切り替える。名刺データ自体は翻訳しない）
@@ -61,6 +64,11 @@ const I18N = {
     pageTitle: 'Cardvalia',
     btnLogin: 'Google アカウントでサインイン',
     btnOpenSetup: '初期設定 (OAuth クライアントID)',
+    authDescIntro: 'Cardvaliaは、いただいた名刺をご自身のGoogleドライブだけで管理できる、名刺管理アプリです。',
+    authDescFeature1: '名刺の登録・検索・タグ管理ができます',
+    authDescFeature2: 'データはすべて、ご自身のGoogleドライブ内の選択したフォルダに保存されます（開発者のサーバーには一切保存されません）',
+    authDescFeature3: '合戦モード・デュエルモードなど、名刺の相手を思い出すための遊び心のある機能もあります',
+    linkPrivacyPolicy: 'プライバシーポリシー',
 
     titleSync: '同期',
     titleAdd: '新規登録',
@@ -142,15 +150,26 @@ const I18N = {
     headingLanguage: '言語',
     langJapanese: '日本語',
     langEnglish: 'English',
+    headingStorageFolder: '保存先フォルダ',
+    storageFolderDesc: '名刺データは、ご自身のGoogleドライブ内で選択したフォルダに保存されます。',
+    btnChangeFolder: 'フォルダを変更',
+    noFolderSelected: '未選択',
+    pickerTitle: '名刺データの保存先フォルダを選択',
+    toastFolderSelectionCancelled: 'フォルダが選択されなかったため、同期を中止しました',
     headingKassenData: '合戦データ',
     btnResetKassenHistory: '合戦履歴をリセット',
     confirmResetKassenHistory: 'すべての合戦履歴をリセットします。よろしいですか？',
     toastKassenHistoryReset: '合戦履歴をリセットしました',
     toastKassenResetError: '合戦履歴のリセットに失敗しました',
+    headingDuelData: 'デュエルデータ',
+    btnResetDuelHistory: 'デュエルデータをリセット',
+    confirmResetDuelHistory: 'すべてのデュエルデータをリセットします。よろしいですか？',
+    toastDuelHistoryReset: 'デュエルデータをリセットしました',
+    toastDuelResetError: 'デュエルデータのリセットに失敗しました',
     headingAppInfo: 'アプリ情報',
     infoVersion: 'バージョン',
     infoStorage: 'ストレージ',
-    infoStorageValue: 'Google ドライブ (BusinessCardManagerApp フォルダ)',
+    infoStorageValue: 'Google ドライブ（ご自身で選択したフォルダ）',
 
     headingKassen: '合戦モード',
     titleKassenRegenerate: '地形再生成',
@@ -271,6 +290,11 @@ const I18N = {
     pageTitle: 'Cardvalia',
     btnLogin: 'Sign in with Google',
     btnOpenSetup: 'Initial Setup (OAuth Client ID)',
+    authDescIntro: 'Cardvalia is a business card manager that stores everything in your own Google Drive.',
+    authDescFeature1: 'Register, search, and tag your business cards',
+    authDescFeature2: "All data is saved to a folder you choose in your own Google Drive — the developer's servers never store it",
+    authDescFeature3: 'Playful extras like Showdown Mode and Duel Mode help you remember who you met',
+    linkPrivacyPolicy: 'Privacy Policy',
 
     titleSync: 'Sync',
     titleAdd: 'Add Card',
@@ -352,15 +376,26 @@ const I18N = {
     headingLanguage: 'Language',
     langJapanese: '日本語',
     langEnglish: 'English',
+    headingStorageFolder: 'Storage Folder',
+    storageFolderDesc: 'Your business card data is stored in a folder you choose within your own Google Drive.',
+    btnChangeFolder: 'Change Folder',
+    noFolderSelected: 'Not selected',
+    pickerTitle: 'Choose a folder to store your business card data',
+    toastFolderSelectionCancelled: 'No folder was selected, so the sync was cancelled',
     headingKassenData: 'Showdown Data',
     btnResetKassenHistory: 'Reset Showdown History',
     confirmResetKassenHistory: 'This will reset all Showdown history. Continue?',
     toastKassenHistoryReset: 'Showdown history has been reset',
     toastKassenResetError: 'Failed to reset Showdown history',
+    headingDuelData: 'Duel Data',
+    btnResetDuelHistory: 'Reset Duel Data',
+    confirmResetDuelHistory: 'This will reset all Duel data. Continue?',
+    toastDuelHistoryReset: 'Duel data has been reset',
+    toastDuelResetError: 'Failed to reset Duel data',
     headingAppInfo: 'App Info',
     infoVersion: 'Version',
     infoStorage: 'Storage',
-    infoStorageValue: 'Google Drive (BusinessCardManagerApp folder)',
+    infoStorageValue: 'Google Drive (a folder you choose)',
 
     headingKassen: 'Showdown Mode',
     titleKassenRegenerate: 'Regenerate Terrain',
@@ -604,11 +639,17 @@ const elements = {
   userEmail: document.getElementById('user-email'),
   userAvatar: document.getElementById('user-avatar'),
   btnLogout: document.getElementById('btn-logout'),
+  currentFolderName: document.getElementById('current-folder-name'),
+  btnChangeFolder: document.getElementById('btn-change-folder'),
   langSwitch: document.getElementById('lang-switch'),
   btnResetKassenHistory: document.getElementById('btn-reset-kassen-history'),
   kassenResetConfirm: document.getElementById('kassen-reset-confirm'),
   btnResetKassenHistoryYes: document.getElementById('btn-reset-kassen-history-yes'),
   btnResetKassenHistoryNo: document.getElementById('btn-reset-kassen-history-no'),
+  btnResetDuelHistory: document.getElementById('btn-reset-duel-history'),
+  duelResetConfirm: document.getElementById('duel-reset-confirm'),
+  btnResetDuelHistoryYes: document.getElementById('btn-reset-duel-history-yes'),
+  btnResetDuelHistoryNo: document.getElementById('btn-reset-duel-history-no'),
   // Missions Screen（ミッション）
   btnCloseMissions: document.getElementById('btn-close-missions'),
   missionsList: document.getElementById('missions-list'),
@@ -840,6 +881,7 @@ function logout() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('tokenExpiry');
   localStorage.removeItem('folderId');
+  localStorage.removeItem('folderName');
   localStorage.removeItem('metadataFileId');
   
   showToast(t('toastLoggedOut'));
@@ -891,7 +933,66 @@ async function driveFetch(url, options = {}) {
   return response;
 }
 
-// ドライブのアプリフォルダとメタデータの同期
+// Google Picker（フォルダ選択UI）の読み込み。初回のみ実際にロードし、以降はキャッシュしたPromiseを返す
+let googlePickerLoadPromise = null;
+function loadGooglePicker() {
+  if (!googlePickerLoadPromise) {
+    googlePickerLoadPromise = new Promise((resolve, reject) => {
+      if (typeof gapi === 'undefined') {
+        reject(new Error('Google API loader is not available'));
+        return;
+      }
+      gapi.load('picker', { callback: resolve, onerror: reject });
+    });
+  }
+  return googlePickerLoadPromise;
+}
+
+// ユーザーが自身のGoogleドライブ内の任意のフォルダを保存先として選ぶ（Picker経由で選んだフォルダには
+// drive.fileスコープのままアクセス権が付与されるため、スコープを広げる必要はない）。
+// キャンセル時はnullを返す
+async function openFolderPicker() {
+  await loadGooglePicker();
+
+  return new Promise((resolve) => {
+    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setSelectFolderEnabled(true)
+      .setIncludeFolders(true)
+      .setMode(google.picker.DocsViewMode.LIST);
+
+    const picker = new google.picker.PickerBuilder()
+      .setOAuthToken(STATE.accessToken)
+      .setDeveloperKey(GOOGLE_PICKER_API_KEY)
+      .addView(view)
+      .setTitle(t('pickerTitle'))
+      .setCallback((data) => {
+        if (data.action === google.picker.Action.PICKED) {
+          const doc = data.docs[0];
+          resolve({ id: doc.id, name: doc.name });
+        } else if (data.action === google.picker.Action.CANCEL) {
+          resolve(null);
+        }
+      })
+      .build();
+    picker.setVisible(true);
+  });
+}
+
+function saveSelectedFolder(folder) {
+  STATE.folderId = folder.id;
+  STATE.folderName = folder.name;
+  localStorage.setItem('folderId', STATE.folderId);
+  localStorage.setItem('folderName', STATE.folderName);
+  updateFolderNameDisplay();
+}
+
+function updateFolderNameDisplay() {
+  if (elements.currentFolderName) {
+    elements.currentFolderName.textContent = STATE.folderName || t('noFolderSelected');
+  }
+}
+
+// ドライブの保存先フォルダとメタデータの同期
 async function syncWithDrive() {
   showLoading(t('loadingSyncing'));
   try {
@@ -900,10 +1001,16 @@ async function syncWithDrive() {
       await fetchUserProfile();
     }
 
-    // 1. フォルダの存在確認・作成
+    // 1. 保存先フォルダが未選択なら、Pickerでユーザーに選んでもらう
     if (!STATE.folderId) {
-      STATE.folderId = await getOrCreateAppFolder();
-      localStorage.setItem('folderId', STATE.folderId);
+      hideLoading();
+      const folder = await openFolderPicker();
+      if (!folder) {
+        showToast(t('toastFolderSelectionCancelled'));
+        return;
+      }
+      saveSelectedFolder(folder);
+      showLoading(t('loadingSyncing'));
     }
 
     // 2. metadata.jsonの存在確認・作成・取得
@@ -924,32 +1031,6 @@ async function syncWithDrive() {
     hideLoading();
     showToast(t('toastSyncError'));
   }
-}
-
-// アプリ専用フォルダの検索または作成
-async function getOrCreateAppFolder() {
-  const query = encodeURIComponent("name = 'BusinessCardManagerApp' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-  const res = await driveFetch(`${DRIVE_API_BASE}/files?q=${query}&fields=files(id)`);
-  const data = await res.json();
-
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id;
-  }
-
-  // 存在しないので新規作成
-  const folderMetadata = {
-    name: 'BusinessCardManagerApp',
-    mimeType: 'application/vnd.google-apps.folder'
-  };
-
-  const createRes = await driveFetch(`${DRIVE_API_BASE}/files`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(folderMetadata)
-  });
-
-  const createdFolder = await createRes.json();
-  return createdFolder.id;
 }
 
 // metadata.json の検索または作成
@@ -1518,7 +1599,10 @@ function registerEventListeners() {
 
   // メイン画面ヘッダー
   elements.btnSync.addEventListener('click', syncWithDrive);
-  elements.btnSettings.addEventListener('click', () => showScreen('screen-settings'));
+  elements.btnSettings.addEventListener('click', () => {
+    updateFolderNameDisplay();
+    showScreen('screen-settings');
+  });
   elements.btnAddCard.addEventListener('click', () => {
     resetAddForm();
     showScreen('screen-add');
@@ -1650,6 +1734,18 @@ function registerEventListeners() {
   // アカウント：ログアウト
   elements.btnLogout.addEventListener('click', logout);
 
+  // 設定画面：保存先フォルダの変更
+  elements.btnChangeFolder.addEventListener('click', async () => {
+    const folder = await openFolderPicker();
+    if (!folder) return;
+
+    saveSelectedFolder(folder);
+    // フォルダが変わったので、以前のフォルダのmetadata.json参照は破棄して読み直す
+    STATE.metadataFileId = '';
+    localStorage.removeItem('metadataFileId');
+    await syncWithDrive();
+  });
+
   // 設定画面：合戦履歴のリセット（確認ダイアログ）
   elements.btnResetKassenHistory.addEventListener('click', () => {
     elements.kassenResetConfirm.classList.remove('hidden');
@@ -1660,6 +1756,18 @@ function registerEventListeners() {
   elements.btnResetKassenHistoryYes.addEventListener('click', () => {
     elements.kassenResetConfirm.classList.add('hidden');
     resetKassenHistory();
+  });
+
+  // 設定画面：デュエルデータのリセット（確認ダイアログ）
+  elements.btnResetDuelHistory.addEventListener('click', () => {
+    elements.duelResetConfirm.classList.remove('hidden');
+  });
+  elements.btnResetDuelHistoryNo.addEventListener('click', () => {
+    elements.duelResetConfirm.classList.add('hidden');
+  });
+  elements.btnResetDuelHistoryYes.addEventListener('click', () => {
+    elements.duelResetConfirm.classList.add('hidden');
+    resetDuelHistory();
   });
 
   // ミッション：開く・閉じる
@@ -2355,6 +2463,22 @@ async function resetKassenHistory() {
   if (STATE.kassenView === 'ranking') renderKassenRanking();
 
   showToast(saveSuccess ? t('toastKassenHistoryReset') : t('toastKassenResetError'));
+}
+
+// デュエルデータ（デュエル数・全名刺のデュエルポイント）をすべて0にリセットする
+async function resetDuelHistory() {
+  showLoading(t('loadingDefault'));
+
+  STATE.duelBattleCount = 0;
+  STATE.cards.forEach(card => { card.duelWinCount = 0; });
+
+  const saveSuccess = await saveMetadata();
+  hideLoading();
+
+  updateDuelBattleCountDisplay();
+  if (STATE.duelView === 'ranking') renderDuelRanking();
+
+  showToast(saveSuccess ? t('toastDuelHistoryReset') : t('toastDuelResetError'));
 }
 
 function updateKassenBattleCountDisplay() {
