@@ -1770,6 +1770,18 @@ body {
   animation: kassen-reveal 0.4s ease;
 }
 
+/* コンテンツの高さに関わらず、常に画面の一番下に固定表示する */
+#duel-battle-count {
+  position: fixed;
+  bottom: 20px;
+}
+
+/* 「対戦相手選択中」「対戦カード決定！」が1行に収まるよう、通常のポップアップより横幅を広げる */
+#duel-select-popup {
+  padding-left: 46px;
+  padding-right: 46px;
+}
+
 /* -----------------------------------------
    OVERLAYS (LOADING & TOAST)
 ----------------------------------------- */
@@ -1876,6 +1888,7 @@ body {
 .sort-mode-popup-title {
   font-size: 1.1rem;
   font-weight: 700;
+  white-space: nowrap;
   background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
