@@ -77,6 +77,7 @@ const I18N = {
     titleMissions: 'ミッション',
     headingMissions: 'ミッション',
     missionThreshold: '{count}枚登録',
+    missionDailyRegistration: '1日に{count}枚登録',
     missionCardsWithMemo10: 'メモありで名刺を10枚登録',
     missionCardsWithoutMemo10: 'メモなしで名刺を10枚登録',
     missionThresholdTags: '{count}種類のタグ登録',
@@ -303,6 +304,7 @@ const I18N = {
     titleMissions: 'Missions',
     headingMissions: 'Missions',
     missionThreshold: '{count}-card milestone',
+    missionDailyRegistration: 'Register {count} cards in one day',
     missionCardsWithMemo10: 'Register 10 cards with a memo',
     missionCardsWithoutMemo10: 'Register 10 cards without a memo',
     missionThresholdTags: '{count}-tag milestone',
@@ -2122,6 +2124,17 @@ function getCardsWithoutMemoCount() {
   return STATE.cards.filter(card => !card.memo || !card.memo.trim()).length;
 }
 
+// 同じ日（登録日時=createdAt基準）に登録した名刺の、これまでの最大枚数
+function getMaxDailyRegistrationCount() {
+  const countsByDate = {};
+  STATE.cards.forEach(card => {
+    if (!card.createdAt) return;
+    const date = card.createdAt.slice(0, 10); // 'YYYY-MM-DD'
+    countsByDate[date] = (countsByDate[date] || 0) + 1;
+  });
+  return Object.values(countsByDate).reduce((max, count) => Math.max(max, count), 0);
+}
+
 // 登録名刺のアルファベットの頭文字（A〜Z）のうち、何種類を制覇したか
 function getUniqueInitialCount() {
   const initialSet = new Set();
@@ -2138,6 +2151,13 @@ const MISSION_BASE_CATEGORIES = [
     thresholds: [1, 5, 10, 25, 50, 75, 100, 200, 500],
     getCount: () => STATE.cards.length,
     getThresholdLabel: threshold => t('missionThreshold', { count: threshold }),
+  },
+  {
+    // 同じ日に登録した名刺の最大枚数
+    key: 'dailyRegistration',
+    thresholds: [3, 5, 10],
+    getCount: () => getMaxDailyRegistrationCount(),
+    getThresholdLabel: threshold => t('missionDailyRegistration', { count: threshold }),
   },
   {
     key: 'cardsWithMemo',
