@@ -23,6 +23,20 @@
   --duel-red-light: #f87171;
   --duel-red-gradient: linear-gradient(135deg, var(--duel-red-light), var(--duel-red));
 
+  /* ダービーモードの枠（ゲート）カラー。競馬の枠色に準拠：1白 2黒 3赤 4青 5黄 6緑 */
+  --gate-1-bg: #ffffff;
+  --gate-1-text: #1a1a1a;
+  --gate-2-bg: #1a1a1a;
+  --gate-2-text: #ffffff;
+  --gate-3-bg: #ef4444;
+  --gate-3-text: #ffffff;
+  --gate-4-bg: #3b82f6;
+  --gate-4-text: #ffffff;
+  --gate-5-bg: #facc15;
+  --gate-5-text: #1a1a1a;
+  --gate-6-bg: #22c55e;
+  --gate-6-text: #ffffff;
+
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -1840,6 +1854,172 @@ body {
 #duel-select-popup {
   padding-left: 46px;
   padding-right: 46px;
+}
+
+/* -----------------------------------------
+   DERBY MODE
+----------------------------------------- */
+.derby-container {
+  position: relative;
+  padding: 20px;
+}
+
+.derby-match {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* コンテンツ（出走者一覧など）が縦に長くなるため、固定位置ではなくボタン群の下に自然に並べる。
+   .kassen-battle-count のtransform（絶対配置での中央寄せ用）は align-self: center と競合するため打ち消す */
+#derby-battle-count {
+  position: static;
+  align-self: center;
+  transform: none;
+}
+
+/* これまでの開催数（またはレース中に非表示となる再抽選ボタン）と出走者一覧の間の余白を、
+   .derby-match の標準gap（20px）より詰める */
+#derby-lineup {
+  margin-top: -10px;
+}
+
+.derby-track-wrapper {
+  width: 100%;
+}
+
+.derby-track {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.derby-track-field {
+  fill: var(--bg-glass-heavy);
+  stroke: var(--border-glass);
+  stroke-width: 2;
+}
+
+.derby-track-boundary {
+  fill: rgba(34, 197, 94, 0.08);
+  stroke: var(--border-glass);
+  stroke-width: 2;
+}
+
+.derby-track-lane {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.07);
+  stroke-width: 1;
+}
+
+.derby-start-line {
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+
+.derby-dot {
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 1.5;
+  transition: cx 0.1s linear, cy 0.1s linear;
+}
+
+/* 出走者一覧：現在の順位に応じてrow毎の top を書き換えることで、順位変動を滑らかにアニメーションさせる */
+.derby-lineup {
+  position: relative;
+}
+
+.derby-entry {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  transition: top 0.3s ease;
+  animation: kassen-reveal 0.4s ease;
+}
+
+.derby-rank {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.derby-gate-badge {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.derby-gate-1 .derby-gate-badge { background: var(--gate-1-bg); color: var(--gate-1-text); }
+.derby-gate-2 .derby-gate-badge { background: var(--gate-2-bg); color: var(--gate-2-text); }
+.derby-gate-3 .derby-gate-badge { background: var(--gate-3-bg); color: var(--gate-3-text); }
+.derby-gate-4 .derby-gate-badge { background: var(--gate-4-bg); color: var(--gate-4-text); }
+.derby-gate-5 .derby-gate-badge { background: var(--gate-5-bg); color: var(--gate-5-text); }
+.derby-gate-6 .derby-gate-badge { background: var(--gate-6-bg); color: var(--gate-6-text); }
+
+.derby-entry-image-wrapper {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid var(--border-glass);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.derby-entry-image-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.derby-entry-image-wrapper i {
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted);
+}
+
+.derby-entry-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.derby-entry-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.derby-entry-alphabet {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* -----------------------------------------

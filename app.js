@@ -45,9 +45,14 @@ let STATE = {
   usedNewestSortAfterAlphabet: false, // アルファベット順に並べ替えた後、登録順に戻したことがあるか
   duelView: 'match',  // デュエルモード画面内の表示切り替え（'match' or 'ranking'）
   duelBattleCount: 0, // これまでのデュエル数（Google Driveに保存）
+  derbyView: 'match',  // ダービーモード画面内の表示切り替え（'match' or 'ranking'）
+  derbyBattleCount: 0, // これまでのダービー開催数（Google Driveに保存）
   // 現在の対戦セッション（画面を開くたびにリセットされる一時状態。Google Driveには保存しない）
   // netScore: -3(右が押し切って勝利)〜+3(左が押し切って勝利)。押し合いなので、相手に押し返されると相殺される
   duel: { left: null, right: null, netScore: 0, winner: null, inProgress: false },
+  // ダービーモードで現在抽選されている出走者6名とレース進行状況（画面を開くたびにリセットされる一時状態。Google Driveには保存しない）
+  // progress: 各ゲート（出走者インデックス）ごとの周回進捗（0〜1）。finishOrder: ゴールした順にゲートインデックスを記録
+  derby: { cards: [], progress: [], finishOrder: [], racing: false },
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -76,6 +81,32 @@ const I18N = {
     titleAdd: '新規登録',
     titleKassen: '合戦モード',
     titleDuel: 'デュエルモード',
+    titleDerby: 'ダービーモード',
+    headingDerby: 'ダービーモード',
+    derbyEmptyNotEnoughCards: '開催するには名刺が6枚以上必要です',
+    btnStartDerby: 'レース開始',
+    btnDerbyReselect: '出走者再抽選',
+    titleDerbyRanking: 'ランキング',
+    headingDerbyRanking: 'ダービー通算ポイントランキング',
+    derbyRankingEmpty: 'まだポイントが入っていません',
+    derbyRankingCount: '{count}pt',
+    derbyBattleCountLabel: 'これまでの開催数: {count}回',
+    derbyStartMessage: 'レーススタート！',
+    derbyZone1Comment: '第1コーナーを抜け、{name}がトップに立った！',
+    derbyZone2Comment: 'コース半ばを通過、{name}が先頭をキープ！',
+    derbyZone3Comment: '最終コーナーへ、{name}がトップのまま進む！',
+    derbyWinnerTemplates: [
+      '🎉 {name}が見事1着でゴール！',
+      '👑 {name}、堂々の優勝です！',
+      '🏆 圧巻の走り、{name}が1位でフィニッシュ！',
+      '✨ {name}が先頭でゴールテープを切りました！',
+      '🎊 {name}、有終の美を飾る1着ゴール！',
+      '🔥 {name}が最後まで粘り切って優勝！',
+      '🌟 {name}、見事な走りで栄冠を手にしました！',
+      '🥇 1着は{name}！おめでとうございます！',
+      '💫 {name}が他を圧倒してトップでゴール！',
+      '🎈 {name}、素晴らしいレースで1着です！'
+    ],
     titleMissions: 'ミッション',
     headingMissions: 'ミッション',
     missionThreshold: '{count}枚登録',
@@ -296,6 +327,32 @@ const I18N = {
     titleAdd: 'Add Card',
     titleKassen: 'Showdown Mode',
     titleDuel: 'Duel Mode',
+    titleDerby: 'Derby Mode',
+    headingDerby: 'Derby Mode',
+    derbyEmptyNotEnoughCards: 'You need at least 6 cards to hold a derby',
+    btnStartDerby: 'Start Race',
+    btnDerbyReselect: 'Redraw Entrants',
+    titleDerbyRanking: 'Ranking',
+    headingDerbyRanking: 'Derby Point Ranking',
+    derbyRankingEmpty: 'No points yet',
+    derbyRankingCount: '{count}pt',
+    derbyBattleCountLabel: 'Races held: {count}',
+    derbyStartMessage: 'Race start!',
+    derbyZone1Comment: 'Out of the first turn, {name} takes the lead!',
+    derbyZone2Comment: 'Halfway through the course, {name} stays in front!',
+    derbyZone3Comment: 'Into the final turn, {name} is still leading!',
+    derbyWinnerTemplates: [
+      '🎉 {name} crosses the line in first place!',
+      '👑 {name} takes a commanding victory!',
+      '🏆 A stunning run — {name} finishes first!',
+      '✨ {name} breaks the tape in the lead!',
+      '🎊 {name} caps it off with a first-place finish!',
+      '🔥 {name} holds on to win it all!',
+      '🌟 A brilliant run earns {name} the crown!',
+      '🥇 First place goes to {name}! Congratulations!',
+      '💫 {name} dominates the field to finish first!',
+      '🎈 {name} wins with a fantastic race!'
+    ],
     titleMissions: 'Missions',
     headingMissions: 'Missions',
     missionThreshold: '{count}-card milestone',
@@ -687,6 +744,24 @@ const elements = {
   duelBattleCount: document.getElementById('duel-battle-count'),
   duelSelectPopup: document.getElementById('duel-select-popup'),
   duelSelectPopupTitle: document.getElementById('duel-select-popup-title'),
+  // Derby Mode Screen（ダービーモード）
+  btnDerby: document.getElementById('btn-derby'),
+  btnCloseDerby: document.getElementById('btn-close-derby'),
+  btnDerbyRanking: document.getElementById('btn-derby-ranking'),
+  derbyRankingView: document.getElementById('derby-ranking-view'),
+  derbyRankingList: document.getElementById('derby-ranking-list'),
+  btnCloseDerbyRanking: document.getElementById('btn-close-derby-ranking'),
+  derbyMatch: document.getElementById('derby-match'),
+  derbyEmptyState: document.getElementById('derby-empty-state'),
+  derbyTrackWrapper: document.getElementById('derby-track-wrapper'),
+  derbyTrack: document.getElementById('derby-track'),
+  derbyCommentary: document.getElementById('derby-commentary'),
+  derbyCommentaryText: document.getElementById('derby-commentary-text'),
+  derbyLineup: document.getElementById('derby-lineup'),
+  btnStartDerby: document.getElementById('btn-start-derby'),
+  btnDerbyReselect: document.getElementById('btn-derby-reselect'),
+  derbyBattleCount: document.getElementById('derby-battle-count'),
+  derbyScreenContent: document.querySelector('#screen-derby .screen-content'),
   // Common UI
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
@@ -1037,7 +1112,7 @@ async function getOrCreateMetadataFileId() {
 
   const boundary = 'foo_bar_baz';
   const metadataPart = JSON.stringify(fileMetadata);
-  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false, duelBattleCount: 0 }); // 空の名刺リスト
+  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false, duelBattleCount: 0, derbyBattleCount: 0 }); // 空の名刺リスト
 
   const multipartBody = 
     `\r\n--${boundary}\r\n` +
@@ -1077,6 +1152,7 @@ async function loadMetadata() {
       STATE.usedAlphabetSort = false;
       STATE.usedNewestSortAfterAlphabet = false;
       STATE.duelBattleCount = 0;
+      STATE.derbyBattleCount = 0;
     } else {
       STATE.cards = data.cards || [];
       STATE.kassenBattleCount = normalizeKassenBattleCount(data.kassenBattleCount);
@@ -1088,6 +1164,7 @@ async function loadMetadata() {
       STATE.usedAlphabetSort = !!data.usedAlphabetSort;
       STATE.usedNewestSortAfterAlphabet = !!data.usedNewestSortAfterAlphabet;
       STATE.duelBattleCount = data.duelBattleCount || 0;
+      STATE.derbyBattleCount = data.derbyBattleCount || 0;
     }
   } else {
     throw new Error('Failed to load metadata');
@@ -1126,6 +1203,7 @@ async function saveMetadata() {
       usedAlphabetSort: STATE.usedAlphabetSort,
       usedNewestSortAfterAlphabet: STATE.usedNewestSortAfterAlphabet,
       duelBattleCount: STATE.duelBattleCount,
+      derbyBattleCount: STATE.derbyBattleCount,
     })
   });
   return res.ok;
@@ -1837,6 +1915,28 @@ function registerEventListeners() {
   // デュエルモード：デュエル開始・対戦相手再選択
   elements.btnStartDuel.addEventListener('click', startDuel);
   elements.btnDuelReselect.addEventListener('click', spinDuelSlotMachine);
+
+  // ダービーモード：開く・閉じる・出走者再抽選
+  elements.btnDerby.addEventListener('click', openDerbyMode);
+  elements.btnCloseDerby.addEventListener('click', () => {
+    showScreen('screen-main');
+    updateMissionsGlow();
+  });
+  elements.btnStartDerby.addEventListener('click', startDerbyRace);
+  elements.btnDerbyReselect.addEventListener('click', drawDerbyLineup);
+
+  // ダービーモード：ランキング表示の切り替え（トグル）
+  elements.btnDerbyRanking.addEventListener('click', () => {
+    showDerbyView(STATE.derbyView === 'ranking' ? 'match' : 'ranking');
+  });
+  elements.btnCloseDerbyRanking.addEventListener('click', () => {
+    showDerbyView('match');
+  });
+  elements.derbyRankingList.addEventListener('click', (e) => {
+    const item = e.target.closest('.kassen-ranking-item');
+    if (!item) return;
+    goToCardFromKassen(item.dataset.id);
+  });
 }
 
 function resetAddForm() {
@@ -3411,6 +3511,410 @@ async function startDuel() {
   elements.btnDuelReselect.classList.remove('hidden');
   setDuelControlsDisabled(false);
   STATE.duel.inProgress = false;
+}
+
+// -------------------------------------------------------------
+// DERBY MODE（ランダムに選ばれた6名が、競馬の枠番カラーで楕円コースを1周し、着順を競う）
+// -------------------------------------------------------------
+
+// 陸上競技場のトラックのような形（上下に直線、左右がカーブ）のコース座標系（SVG viewBox基準）
+const DERBY_TRACK_CENTER = { cx: 150, cy: 100 };
+const DERBY_STRAIGHT_HALF_LEN = 65; // 直線区間の中心からの長さ（左右のカーブ入口までの距離）
+const DERBY_LANE_TURN_R_START = 28; // 1コース（内側）のカーブ半径
+const DERBY_LANE_TURN_R_STEP = 10;  // コースが1つ外側に増えるごとのカーブ半径の増分（丸同士が重ならない間隔を確保）
+// スタート地点：下の直線区間・中央よりやや右（中心からのオフセット）
+const DERBY_START_OFFSET_X = 18;
+const DERBY_DOT_RADIUS = 5;
+
+const DERBY_TICK_MS = 100;
+const DERBY_PROGRESS_MIN_STEP = 0.006;
+const DERBY_PROGRESS_MAX_STEP = 0.022;
+
+const DERBY_ROW_HEIGHT = 64;
+const DERBY_ROW_GAP = 10;
+const DERBY_ROW_STEP = DERBY_ROW_HEIGHT + DERBY_ROW_GAP;
+
+// 着順ポイント（1着=3pt, 2着=2pt, 3着=1pt, 4着以下=0pt）
+const DERBY_PLACEMENT_POINTS = [3, 2, 1];
+// 記念大会（開催数が10または100の倍数）はポイント3倍
+const DERBY_ANNIVERSARY_MULTIPLIER = 3;
+
+function getCardDerbyPoints(card) {
+  return card.derbyPoints || 0;
+}
+
+// 通常は着順ポイント（1着3pt/2着2pt/3着1pt）、記念大会（開催数が10・100の倍数）は3倍
+function incrementCardDerbyPoints(card, points = 1) {
+  card.derbyPoints = (card.derbyPoints || 0) + points;
+}
+
+function updateDerbyBattleCountDisplay() {
+  elements.derbyBattleCount.textContent = t('derbyBattleCountLabel', { count: STATE.derbyBattleCount || 0 });
+}
+
+// 通算ポイントの降順（同ポイントなら登録年月が古い方、さらに同じならアルファベット順）でランキングを算出する。
+// 未獲得（0pt）の名刺はランキング対象外で、上位20名まで表示する。
+function getDerbyRanking() {
+  return STATE.cards
+    .filter(card => getCardDerbyPoints(card) >= 1)
+    .slice()
+    .sort((a, b) => {
+      const countDiff = getCardDerbyPoints(b) - getCardDerbyPoints(a);
+      if (countDiff !== 0) return countDiff;
+
+      const monthA = getCardRegisteredMonth(a);
+      const monthB = getCardRegisteredMonth(b);
+      if (monthA !== monthB) return monthA.localeCompare(monthB);
+
+      return (a.alphabet || '').localeCompare(b.alphabet || '', undefined, { sensitivity: 'base' });
+    })
+    .slice(0, 20);
+}
+
+function renderDerbyRanking() {
+  const ranking = getDerbyRanking();
+
+  if (ranking.length === 0) {
+    elements.derbyRankingList.innerHTML = `<p class="kassen-ranking-empty">${t('derbyRankingEmpty')}</p>`;
+    return;
+  }
+
+  elements.derbyRankingList.innerHTML = ranking.map((card, i) => {
+    const rank = i + 1;
+    return `
+      <button type="button" class="kassen-ranking-item rank-${rank}" data-id="${card.id}">
+        <span class="kassen-ranking-rank">${rank === 1 ? '<i data-lucide="crown"></i>' : rank}</span>
+        <span class="kassen-ranking-info">
+          <span class="kassen-ranking-name">${escapeHTML(card.name)}</span>
+          <span class="kassen-ranking-alphabet">${escapeHTML(card.alphabet)}</span>
+        </span>
+        <span class="kassen-ranking-count">${t('derbyRankingCount', { count: getCardDerbyPoints(card) })}</span>
+      </button>
+    `;
+  }).join('');
+  lucide.createIcons();
+}
+
+// ダービーモード画面内の表示切り替え（'match' = レース画面, 'ranking' = ランキング）
+function showDerbyView(view) {
+  STATE.derbyView = view;
+  const isRanking = view === 'ranking';
+
+  elements.derbyRankingView.classList.toggle('hidden', !isRanking);
+  elements.derbyMatch.classList.toggle('hidden', isRanking);
+
+  if (isRanking) renderDerbyRanking();
+  elements.btnDerbyRanking.classList.toggle('active', isRanking);
+}
+
+// 出走者候補から重複しない6枚をランダムに選ぶ
+function pickSixRandomCards() {
+  if (STATE.cards.length < 6) return null;
+  const pool = STATE.cards.slice();
+  const picked = [];
+  for (let i = 0; i < 6; i++) {
+    const idx = Math.floor(Math.random() * pool.length);
+    picked.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return picked;
+}
+
+function getDerbyTurnRadius(laneIndex) {
+  return DERBY_LANE_TURN_R_START + laneIndex * DERBY_LANE_TURN_R_STEP;
+}
+
+// 陸上トラック形（直線＋半円カーブ）の外周パスをSVGのd属性文字列として組み立てる
+function buildDerbyStadiumPath(r, halfLen) {
+  const { cx, cy } = DERBY_TRACK_CENTER;
+  return [
+    `M ${cx - halfLen} ${cy - r}`,
+    `L ${cx + halfLen} ${cy - r}`,
+    `A ${r} ${r} 0 0 1 ${cx + halfLen} ${cy + r}`,
+    `L ${cx - halfLen} ${cy + r}`,
+    `A ${r} ${r} 0 0 1 ${cx - halfLen} ${cy - r}`,
+    'Z'
+  ].join(' ');
+}
+
+// progress（0〜1＝1周分の進捗）とコース（レーン）から、コース上の座標を求める。
+// 下直線（スタート地点）→右カーブ→上直線→左カーブ→下直線（スタート地点）の順に進む＝反時計回り
+function getDerbyDotPosition(laneIndex, progress) {
+  const r = getDerbyTurnRadius(laneIndex);
+  const H = DERBY_STRAIGHT_HALF_LEN;
+  const offsetX = DERBY_START_OFFSET_X;
+  const { cx, cy } = DERBY_TRACK_CENTER;
+
+  const segA = H - offsetX;  // 下直線：スタート地点→右下カーブ入口
+  const segB = Math.PI * r;  // 右カーブ（半円）
+  const segC = 2 * H;        // 上直線
+  const segD = Math.PI * r;  // 左カーブ（半円）
+  const segE = H + offsetX;  // 下直線：左下カーブ出口→スタート地点
+  const total = segA + segB + segC + segD + segE;
+
+  let s = (((progress % 1) + 1) % 1) * total;
+
+  if (s < segA) {
+    return { x: cx + offsetX + s, y: cy + r };
+  }
+  s -= segA;
+
+  if (s < segB) {
+    const angleDeg = 90 - (s / segB) * 180;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    return { x: cx + H + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) };
+  }
+  s -= segB;
+
+  if (s < segC) {
+    return { x: cx + H - s, y: cy - r };
+  }
+  s -= segC;
+
+  if (s < segD) {
+    const angleDeg = 270 - (s / segD) * 180;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    return { x: cx - H + r * Math.cos(angleRad), y: cy + r * Math.sin(angleRad) };
+  }
+  s -= segD;
+
+  return { x: cx - H + s, y: cy + r };
+}
+
+// 出走者の数（レーン数）分のトラック・スタートライン・ドットをまとめて描画する
+function renderDerbyTrack() {
+  const cards = STATE.derby.cards;
+  const lastLane = cards.length - 1;
+  const outerR = getDerbyTurnRadius(lastLane);
+  const innerR = getDerbyTurnRadius(0);
+  const H = DERBY_STRAIGHT_HALF_LEN;
+
+  const fieldPath = buildDerbyStadiumPath(innerR - 8, H - 12);
+  const boundaryPath = buildDerbyStadiumPath(outerR + 9, H + 9);
+
+  const startX = DERBY_TRACK_CENTER.cx + DERBY_START_OFFSET_X;
+  const startY1 = DERBY_TRACK_CENTER.cy + innerR - 5;
+  const startY2 = DERBY_TRACK_CENTER.cy + outerR + 5;
+
+  const dotsSvg = cards.map((card, i) => {
+    const pos = getDerbyDotPosition(i, STATE.derby.progress[i] || 0);
+    const finished = (STATE.derby.progress[i] || 0) >= 1;
+    return `<circle id="derby-dot-${i}" class="derby-dot${finished ? ' hidden' : ''}" cx="${pos.x}" cy="${pos.y}" r="${DERBY_DOT_RADIUS}" style="fill:var(--gate-${i + 1}-bg);"/>`;
+  }).join('');
+
+  elements.derbyTrack.innerHTML = `
+    <path class="derby-track-boundary" d="${boundaryPath}"/>
+    <path class="derby-track-field" d="${fieldPath}"/>
+    <line class="derby-start-line" x1="${startX}" y1="${startY1}" x2="${startX}" y2="${startY2}"/>
+    ${dotsSvg}
+  `;
+}
+
+// ゴールした（progress>=1）出走者の丸はコース上から非表示にする
+function updateDerbyDotPositions() {
+  STATE.derby.cards.forEach((_, i) => {
+    const dot = document.getElementById(`derby-dot-${i}`);
+    if (!dot) return;
+
+    if (STATE.derby.progress[i] >= 1) {
+      dot.classList.add('hidden');
+      return;
+    }
+
+    const pos = getDerbyDotPosition(i, STATE.derby.progress[i]);
+    dot.setAttribute('cx', pos.x);
+    dot.setAttribute('cy', pos.y);
+  });
+}
+
+// 現在の進捗（周回率）順に、出走者一覧の各行の表示位置（top）と現在順位を更新する。
+// ゴール済み（progress>=1）の出走者同士は進捗が同値（1）になるため、実際にゴールした順（finishOrder）で順位を付け、
+// レース中の出走者はまだゴールしていない者より必ず下位とした上で、進捗が大きい順に暫定順位とする
+function updateDerbyRaceListOrder() {
+  const progress = STATE.derby.progress;
+  const finishOrder = STATE.derby.finishOrder;
+  const order = progress.map((_, i) => i).sort((a, b) => {
+    const finishedA = progress[a] >= 1;
+    const finishedB = progress[b] >= 1;
+    if (finishedA && finishedB) return finishOrder.indexOf(a) - finishOrder.indexOf(b);
+    if (finishedA !== finishedB) return finishedA ? -1 : 1;
+    if (progress[b] !== progress[a]) return progress[b] - progress[a];
+    return a - b;
+  });
+  order.forEach((gateIndex, rank) => {
+    const row = document.getElementById(`derby-race-row-${gateIndex}`);
+    if (row) row.style.top = `${rank * DERBY_ROW_STEP}px`;
+
+    const rankLabel = document.getElementById(`derby-rank-${gateIndex}`);
+    if (!rankLabel) return;
+
+    // 1着がゴール済みの場合のみ、「1」を王冠アイコンに置き換える（レース中の暫定首位はまだ王冠にしない）
+    const isConfirmedWinner = rank === 0 && progress[gateIndex] >= 1;
+    if (isConfirmedWinner) {
+      if (rankLabel.dataset.crown !== '1') {
+        rankLabel.innerHTML = '<i data-lucide="crown"></i>';
+        rankLabel.dataset.crown = '1';
+        lucide.createIcons();
+      }
+    } else {
+      if (rankLabel.dataset.crown === '1') delete rankLabel.dataset.crown;
+      rankLabel.textContent = rank + 1;
+    }
+  });
+}
+
+async function renderDerbyLineup() {
+  const cards = STATE.derby.cards;
+  elements.derbyLineup.style.height = `${cards.length * DERBY_ROW_STEP - DERBY_ROW_GAP}px`;
+  elements.derbyLineup.innerHTML = cards.map((card, i) => `
+    <div class="derby-entry derby-gate-${i + 1}" id="derby-race-row-${i}" style="top:${i * DERBY_ROW_STEP}px">
+      <div class="derby-rank" id="derby-rank-${i}">${i + 1}</div>
+      <div class="derby-gate-badge">${i + 1}</div>
+      <div class="derby-entry-image-wrapper" id="derby-entry-image-${i}"><i data-lucide="user"></i></div>
+      <div class="derby-entry-info">
+        <div class="derby-entry-name">${escapeHTML(card.name)}</div>
+        <div class="derby-entry-alphabet">${escapeHTML(card.alphabet)}</div>
+      </div>
+      <span class="kassen-ranking-count" id="derby-points-${i}"></span>
+    </div>
+  `).join('');
+  lucide.createIcons();
+
+  await Promise.all(cards.map(async (card, i) => {
+    if (!card.imageId) return;
+    const imageUrl = await fetchCardImage(card.imageId);
+    if (imageUrl) {
+      const imageWrapper = document.getElementById(`derby-entry-image-${i}`);
+      if (imageWrapper) imageWrapper.innerHTML = `<img src="${imageUrl}" alt="${escapeHTML(card.name)}">`;
+    }
+  }));
+}
+
+function drawDerbyLineup() {
+  const picked = pickSixRandomCards();
+  STATE.derby.cards = picked || [];
+  STATE.derby.progress = picked ? picked.map(() => 0) : [];
+  STATE.derby.finishOrder = [];
+  STATE.derby.racing = false;
+
+  const notEnough = !picked;
+  elements.derbyEmptyState.classList.toggle('hidden', !notEnough);
+  elements.derbyTrackWrapper.classList.toggle('hidden', notEnough);
+  elements.derbyLineup.classList.toggle('hidden', notEnough);
+  elements.btnStartDerby.classList.toggle('hidden', notEnough);
+  elements.btnDerbyReselect.classList.toggle('hidden', notEnough);
+  elements.derbyCommentary.classList.add('hidden');
+  elements.derbyCommentaryText.textContent = '';
+
+  if (picked) {
+    elements.btnStartDerby.disabled = false;
+    renderDerbyTrack();
+    renderDerbyLineup();
+  }
+}
+
+function openDerbyMode() {
+  showScreen('screen-derby');
+  showDerbyView('match');
+  updateDerbyBattleCountDisplay();
+  drawDerbyLineup();
+}
+
+// コースを進行方向に4等分したときの区切り（0.25刻み）。いずれかの出走者がその区切りを
+// 通過するたびに、その時点の先頭（トップ）を実況する
+const DERBY_ZONE_THRESHOLDS = [0.25, 0.5, 0.75];
+const DERBY_ZONE_COMMENT_KEYS = ['derbyZone1Comment', 'derbyZone2Comment', 'derbyZone3Comment'];
+
+// 現在最も進捗が進んでいる（トップの）出走者を返す
+function getDerbyLeaderCard() {
+  const progress = STATE.derby.progress;
+  const leaderIndex = progress.reduce((best, p, i) => (p > progress[best] ? i : best), 0);
+  return STATE.derby.cards[leaderIndex];
+}
+
+// レース開始。「レーススタート！」表示から1.3秒後に走行を開始し、tickごとに各出走者の進捗を
+// ランダムに進める。コースを4等分した区切りを誰かが通過するたびにその時のトップを実況し、
+// 1周（progress>=1）した順に着順が決まる。出走者一覧は進捗順に行のtopを書き換えて順位変動をアニメーションさせる
+async function startDerbyRace() {
+  if (STATE.derby.racing || STATE.derby.cards.length < 6) return;
+  if (STATE.derby.finishOrder.length === STATE.derby.cards.length) return; // 既に完走済み
+
+  STATE.derby.racing = true;
+  elements.btnStartDerby.disabled = true;
+  elements.btnDerbyReselect.classList.add('hidden');
+
+  if (elements.derbyScreenContent) {
+    elements.derbyScreenContent.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  elements.derbyCommentary.classList.remove('hidden');
+  elements.derbyCommentaryText.textContent = t('derbyStartMessage');
+  await duelSleep(1300);
+
+  // これまでの開催数をカウント。10または100の倍数は「記念大会」でポイント3倍
+  STATE.derbyBattleCount = (STATE.derbyBattleCount || 0) + 1;
+  const battleNumber = STATE.derbyBattleCount;
+  const isCentennialDerby = battleNumber % 100 === 0;
+  const isAnniversaryDerby = !isCentennialDerby && battleNumber % 10 === 0;
+  updateDerbyBattleCountDisplay();
+
+  let nextZoneIndex = 0;
+
+  await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      STATE.derby.cards.forEach((_, i) => {
+        if (STATE.derby.progress[i] >= 1) return;
+        const step = DERBY_PROGRESS_MIN_STEP + Math.random() * (DERBY_PROGRESS_MAX_STEP - DERBY_PROGRESS_MIN_STEP);
+        STATE.derby.progress[i] = Math.min(1, STATE.derby.progress[i] + step);
+        if (STATE.derby.progress[i] >= 1 && !STATE.derby.finishOrder.includes(i)) {
+          STATE.derby.finishOrder.push(i);
+        }
+      });
+
+      updateDerbyDotPositions();
+      updateDerbyRaceListOrder();
+
+      while (
+        nextZoneIndex < DERBY_ZONE_THRESHOLDS.length &&
+        STATE.derby.progress.some(p => p >= DERBY_ZONE_THRESHOLDS[nextZoneIndex])
+      ) {
+        const leaderCard = getDerbyLeaderCard();
+        elements.derbyCommentaryText.textContent = t(DERBY_ZONE_COMMENT_KEYS[nextZoneIndex], { name: leaderCard.name });
+        nextZoneIndex++;
+      }
+
+      if (STATE.derby.progress.every(p => p >= 1)) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, DERBY_TICK_MS);
+  });
+
+  const isBonusDerby = isAnniversaryDerby || isCentennialDerby;
+  const multiplier = isBonusDerby ? DERBY_ANNIVERSARY_MULTIPLIER : 1;
+  STATE.derby.finishOrder.slice(0, 3).forEach((gateIndex, i) => {
+    const card = STATE.derby.cards[gateIndex];
+    const points = DERBY_PLACEMENT_POINTS[i] * multiplier;
+    incrementCardDerbyPoints(card, points);
+
+    const pointsEl = document.getElementById(`derby-points-${gateIndex}`);
+    if (pointsEl) {
+      pointsEl.textContent = `+${points}pt`;
+      pointsEl.classList.toggle('kassen-mvp-points-bonus', isBonusDerby);
+    }
+  });
+  saveMetadata().catch(err => console.error('ダービー結果の保存に失敗しました:', err));
+  if (STATE.derbyView === 'ranking') renderDerbyRanking();
+
+  const winnerCard = STATE.derby.cards[STATE.derby.finishOrder[0]];
+  const winnerTemplates = t('derbyWinnerTemplates');
+  const winnerTemplate = winnerTemplates[Math.floor(Math.random() * winnerTemplates.length)];
+  elements.derbyCommentaryText.textContent = winnerTemplate.replace(/\{name\}/g, winnerCard.name);
+
+  if (isCentennialDerby) showToast(t('kassenCentennialLabel'));
+  else if (isAnniversaryDerby) showToast(t('kassenAnniversaryLabel'));
+
+  STATE.derby.racing = false;
+  elements.btnDerbyReselect.classList.remove('hidden');
 }
 
 // -------------------------------------------------------------

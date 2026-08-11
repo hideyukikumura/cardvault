@@ -75,11 +75,11 @@
             <button id="btn-duel" class="btn-icon" title="デュエルモード" data-i18n-title="titleDuel">
               <i data-lucide="sword"></i>
             </button>
+            <button id="btn-derby" class="btn-icon" title="ダービーモード" data-i18n-title="titleDerby">
+              <i data-lucide="flag"></i>
+            </button>
             <button id="btn-missions" class="btn-icon" title="ミッション" data-i18n-title="titleMissions">
               <i data-lucide="target"></i>
-            </button>
-            <button id="btn-settings" class="btn-icon" title="設定" data-i18n-title="titleSettings">
-              <i data-lucide="settings"></i>
             </button>
           </div>
         </div>
@@ -141,6 +141,9 @@
           </button>
           <button id="btn-add-card" class="btn-icon btn-add" title="新規登録" data-i18n-title="titleAdd">
             <i data-lucide="plus"></i>
+          </button>
+          <button id="btn-settings" class="btn-icon" title="設定" data-i18n-title="titleSettings">
+            <i data-lucide="settings"></i>
           </button>
         </div>
       </main>
@@ -481,7 +484,61 @@
       </div>
     </section>
 
-    <!-- 6. MISSIONS SCREEN (名刺登録数に応じたミッション達成) -->
+    <!-- 6. DERBY SCREEN (ランダムに選ばれた6名によるダービーモード) -->
+    <section id="screen-derby" class="screen">
+      <div class="screen-content glass-fullscreen">
+        <header class="sub-header">
+          <button id="btn-close-derby" class="btn-back">
+            <i data-lucide="arrow-left"></i>
+          </button>
+          <h2 data-i18n="headingDerby">ダービーモード</h2>
+          <div class="header-actions">
+            <button id="btn-derby-ranking" class="btn-icon" title="ランキング" data-i18n-title="titleDerbyRanking">
+              <i data-lucide="trophy"></i>
+            </button>
+          </div>
+        </header>
+
+        <div class="derby-container">
+          <div id="derby-match" class="derby-match">
+            <div id="derby-empty-state" class="kassen-empty-state hidden">
+              <i data-lucide="flag"></i>
+              <p data-i18n="derbyEmptyNotEnoughCards">開催するには名刺が6枚以上必要です</p>
+            </div>
+
+            <div id="derby-track-wrapper" class="derby-track-wrapper hidden">
+              <svg id="derby-track" class="derby-track" viewBox="0 0 300 200"></svg>
+            </div>
+
+            <div id="derby-commentary" class="kassen-commentary hidden">
+              <p id="derby-commentary-text" class="kassen-commentary-text"></p>
+            </div>
+
+            <div id="derby-battle-count" class="kassen-battle-count"></div>
+
+            <button id="btn-derby-reselect" class="btn btn-secondary btn-block hidden">
+              <i data-lucide="shuffle"></i>
+              <span data-i18n="btnDerbyReselect">出走者再抽選</span>
+            </button>
+
+            <div id="derby-lineup" class="derby-lineup hidden"></div>
+
+            <button id="btn-start-derby" class="btn btn-primary btn-lg btn-block hidden">
+              <i data-lucide="flag"></i>
+              <span data-i18n="btnStartDerby">レース開始</span>
+            </button>
+          </div>
+
+          <div id="derby-ranking-view" class="kassen-ranking-view hidden">
+            <h3 class="kassen-ranking-heading" data-i18n="headingDerbyRanking">ダービー通算ポイントランキング</h3>
+            <div id="derby-ranking-list" class="kassen-ranking-list"></div>
+            <button id="btn-close-derby-ranking" class="btn btn-secondary btn-block" data-i18n="btnClose">閉じる</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. MISSIONS SCREEN (名刺登録数に応じたミッション達成) -->
     <section id="screen-missions" class="screen">
       <div class="screen-content glass-fullscreen">
         <header class="sub-header">
