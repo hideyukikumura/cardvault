@@ -138,9 +138,11 @@ const I18N = {
     missionThresholdTagBattles: 'タグモードで{count}回合戦',
     missionThresholdInitialBattles: 'イニシャルモードで{count}回合戦',
     missionThresholdDuelBattles: 'デュエルで{count}回対戦',
+    missionThresholdDerbyBattles: 'ダービーで{count}回レース',
     missionMaxPointsTag: 'タグモードで{count}pt達成の名刺が出現',
     missionMaxPointsInitial: 'イニシャルモードで{count}pt達成の名刺が出現',
     missionMaxPointsDuel: 'デュエルで{count}pt達成の名刺が出現',
+    missionMaxPointsDerby: 'ダービーで{count}pt達成の名刺が出現',
     missionHexCount100: 'マップのヘックス総数100個達成',
     missionIslandDetected: 'マップに孤島が発生',
     missionAlphabetCount: 'イニシャル{count}文字制覇',
@@ -157,6 +159,11 @@ const I18N = {
     missionLocked: '名刺を登録して解放しよう',
     missionLockedBattle: '合戦をして解放しよう',
     missionLockedDuel: 'デュエルをして解放しよう',
+    missionLockedDerby: 'ダービーをして解放しよう',
+    badgeRankOneKassenTag: 'タグ合戦1位',
+    badgeRankOneKassenInitial: 'イニシャル合戦1位',
+    badgeRankOneDuel: 'デュエル1位',
+    badgeRankOneDerby: 'ダービー1位',
     titleSettings: '設定',
     titleSortNewest: '並べ替え：登録が新しい順',
     titleSortAlphabet: '並べ替え：アルファベット順',
@@ -252,6 +259,14 @@ const I18N = {
       '【{team}】{name}が奮戦するも、力及ばず敗退…',
       '【{team}】ここで{team}が脱落。{name}、お疲れ様でした…'
     ],
+    // 脱落したチームの陣地を継承した側（陣地拡大チーム）にフィーチャーした実況
+    kassenTerritoryTemplates: [
+      '{name}の活躍で、{winner}が陣地を広げる！',
+      '{winner}が勢いに乗る！立役者は{name}だ！',
+      '{name}の奮闘もあり、{winner}の勢力がさらに拡大！',
+      '気づけば{winner}の陣地が広がっていた。中心にいたのは{name}。',
+      '{name}の活躍が光る中、{winner}が着々と領地を広げていく！'
+    ],
 
     headingDuel: 'デュエルモード',
     titleDuelRanking: 'ランキング',
@@ -285,7 +300,17 @@ const I18N = {
       '{name}、静かな自信を漂わせる一手！',
       '{name}が魅せる、鮮烈なポーズ！',
       '{name}のさりげない一言に、どよめきが起こる！',
-      '{name}、余裕の笑みでリズムを刻む！'
+      '{name}、余裕の笑みでリズムを刻む！',
+      '{name}、優雅な一礼で場を制す！',
+      '{name}が繰り出す、流れるような身のこなし！',
+      '{name}の視線ひとつで空気が変わる！',
+      '{name}、しなやかな身のこなしで一歩前へ！',
+      '{name}が魅せる、静かな貫禄！',
+      '{name}、涼しげな表情でリードを奪う！',
+      '{name}の指先が奏でる、鮮やかな一手！',
+      '{name}、軽やかな足取りで場を沸かせる！',
+      '{name}が放つ、洗練された一瞬のきらめき！',
+      '{name}、余裕の表情で流れを引き寄せる！'
     ],
     duelSpecialTemplates: [
       '✨ {name}の必殺技「テレポート」炸裂！',
@@ -395,9 +420,11 @@ const I18N = {
     missionThresholdTagBattles: '{count} Tag Mode battles',
     missionThresholdInitialBattles: '{count} Initial Mode battles',
     missionThresholdDuelBattles: '{count} Duel Mode matches',
+    missionThresholdDerbyBattles: '{count} Derby Mode races',
     missionMaxPointsTag: 'A card reaches {count}pt in Tag Mode',
     missionMaxPointsInitial: 'A card reaches {count}pt in Initial Mode',
     missionMaxPointsDuel: 'A card reaches {count}pt in Duel Mode',
+    missionMaxPointsDerby: 'A card reaches {count}pt in Derby Mode',
     missionHexCount100: 'Reach 100 hexes on the map',
     missionIslandDetected: 'An island appeared on the map',
     missionAlphabetCount: 'Conquer {count} initials',
@@ -414,6 +441,11 @@ const I18N = {
     missionLocked: 'Keep adding cards to unlock',
     missionLockedBattle: 'Fight a Showdown to unlock',
     missionLockedDuel: 'Fight a Duel to unlock',
+    missionLockedDerby: 'Race in Derby Mode to unlock',
+    badgeRankOneKassenTag: 'Tag Battle #1',
+    badgeRankOneKassenInitial: 'Initial Battle #1',
+    badgeRankOneDuel: 'Duel #1',
+    badgeRankOneDerby: 'Derby #1',
     titleSettings: 'Settings',
     titleSortNewest: 'Sort: Newest first',
     titleSortAlphabet: 'Sort: Alphabetical',
@@ -509,6 +541,14 @@ const I18N = {
       '[{team}] {name} put up a struggle, but it was not enough...',
       '[{team}] {team} has fallen here. Well fought, {name}...'
     ],
+    // 脱落したチームの陣地を継承した側（陣地拡大チーム）にフィーチャーした実況
+    kassenTerritoryTemplates: [
+      "Thanks to {name}'s efforts, {winner} expands their territory!",
+      '{winner} is gaining momentum, led by {name}!',
+      "With {name} leading the charge, {winner}'s influence grows even further!",
+      "Before anyone noticed, {winner}'s territory had grown — {name} was at the center of it.",
+      'With {name} shining, {winner} steadily expands their domain!'
+    ],
 
     headingDuel: 'Duel Mode',
     titleDuelRanking: 'Ranking',
@@ -542,7 +582,17 @@ const I18N = {
       '{name} exudes quiet confidence!',
       '{name} strikes a striking pose!',
       "{name}'s offhand remark draws gasps!",
-      '{name} keeps the rhythm with an easy smile!'
+      '{name} keeps the rhythm with an easy smile!',
+      '{name} takes command of the arena with a graceful bow!',
+      '{name} flows through a seamless motion!',
+      "One glance from {name} shifts the mood!",
+      '{name} steps forward with effortless grace!',
+      '{name} shows off a quiet, commanding presence!',
+      '{name} steals the lead with a cool expression!',
+      "{name}'s fingertips conjure a dazzling move!",
+      '{name} lights up the arena with a light-footed stride!',
+      '{name} unleashes a polished flash of brilliance!',
+      '{name} draws the momentum in with easy confidence!'
     ],
     duelSpecialTemplates: [
       '✨ {name} unleashes a finishing move: Teleport!',
@@ -916,8 +966,22 @@ function showToast(message, duration = 3000) {
 // -------------------------------------------------------------
 // GOOGLE OAUTH 2.0 (AUTHENTICATION)
 // -------------------------------------------------------------
-function initGoogleAuth() {
+// GIS（Google Identity Services）のスクリプトはindex.html側でasync deferで読み込まれるため、
+// このアプリ側の初期化コードより後にgoogleオブジェクトが定義されるタイミングがあり得る。
+// その場合にすぐエラー扱いにせず、スクリプトの読み込みを少し待ってから再試行する
+// （最大20回×150ms=3秒。それでも読み込めなければ本当に失敗とみなす）
+function initGoogleAuth(retryCount = 0) {
   if (!STATE.clientId) return;
+
+  if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+    if (retryCount < 20) {
+      setTimeout(() => initGoogleAuth(retryCount + 1), 150);
+    } else {
+      console.error('Google Identity Services script failed to load in time.');
+      showToast(t('toastGoogleLibError'));
+    }
+    return;
+  }
 
   try {
     // GSIクライアントの初期化
@@ -1065,7 +1129,11 @@ async function openFolderPicker() {
     const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
       .setSelectFolderEnabled(true)
       .setIncludeFolders(true)
-      .setMode(google.picker.DocsViewMode.LIST);
+      .setMode(google.picker.DocsViewMode.LIST)
+      // 初期表示をマイドライブのルートにし、他アカウントから共有されたフォルダ（「リンクを知っている全員」等）を
+      // 一覧から除外して、自分の所有物のみを選択候補にする
+      .setParent('root')
+      .setOwnedByMe(true);
 
     const picker = new google.picker.PickerBuilder()
       .setOAuthToken(STATE.accessToken)
@@ -1442,6 +1510,59 @@ function renderFilters() {
   });
 }
 
+// 各モードの現在のランキング1位カードIDをまとめて算出する。
+// renderCards()内でカードごとに毎回ランキング計算をやり直さないよう、1回だけ実行してMapとして使い回す
+function getMainScreenRankOneCardIds() {
+  const ids = {};
+  const tagTop = getKassenRanking('tag')[0];
+  if (tagTop) ids.kassenTag = tagTop.id;
+  const initialTop = getKassenRanking('initial')[0];
+  if (initialTop) ids.kassenInitial = initialTop.id;
+  const duelTop = getDuelRanking()[0];
+  if (duelTop) ids.duel = duelTop.id;
+  const derbyTop = getDerbyRanking()[0];
+  if (derbyTop) ids.derby = derbyTop.id;
+  return ids;
+}
+
+// 該当カードが各モードの現在のランキング1位であれば、そのバッジ（王冠アイコン＋ラベル）のHTMLを返す
+function buildCardRankBadgesHTML(card, rankOneIds) {
+  const badges = [];
+  if (rankOneIds.derby === card.id) badges.push({ jump: 'derby', label: t('badgeRankOneDerby') });
+  if (rankOneIds.kassenTag === card.id) badges.push({ jump: 'kassenTag', label: t('badgeRankOneKassenTag') });
+  if (rankOneIds.kassenInitial === card.id) badges.push({ jump: 'kassenInitial', label: t('badgeRankOneKassenInitial') });
+  if (rankOneIds.duel === card.id) badges.push({ jump: 'duel', label: t('badgeRankOneDuel') });
+
+  if (badges.length === 0) return '';
+
+  return `
+    <div class="card-rank-badges">
+      ${badges.map(b => `<button type="button" class="card-rank-badge" data-jump="${b.jump}"><i data-lucide="crown"></i>${escapeHTML(b.label)}</button>`).join('')}
+    </div>
+  `;
+}
+
+// メイン画面のランキング1位バッジをタップした際、該当モードのランキング画面へ直接ジャンプする
+function goToKassenRankingFromMain(mode) {
+  STATE.kassenMode = mode;
+  document.querySelectorAll('.kassen-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  showScreen('screen-kassen');
+  showKassenView('ranking');
+}
+
+function goToDuelRankingFromMain() {
+  showScreen('screen-duel');
+  showDuelView('ranking');
+}
+
+function goToDerbyRankingFromMain() {
+  showScreen('screen-derby');
+  updateDerbyBattleCountDisplay();
+  showDerbyView('ranking');
+}
+
 function renderCards() {
   const container = elements.cardDeck;
   container.innerHTML = '';
@@ -1473,6 +1594,8 @@ function renderCards() {
   elements.cardIndicator.classList.remove('hidden');
   updateIndicator();
 
+  const rankOneIds = getMainScreenRankOneCardIds();
+
   // カード要素を動的に生成して挿入
   STATE.filteredCards.forEach((card, index) => {
     const cardEl = document.createElement('div');
@@ -1488,6 +1611,7 @@ function renderCards() {
         <img class="card-image hidden" id="card-img-${index}" alt="${card.name}">
       </div>
       <div class="card-info">
+        ${buildCardRankBadgesHTML(card, rankOneIds)}
         <div class="name-row">
           <div>
             <h3>${escapeHTML(card.name)}</h3>
@@ -1504,7 +1628,7 @@ function renderCards() {
           </div>
         </div>
         <div class="card-tags">
-          ${card.tags ? card.tags.map(tag => `<span class="card-tag">${escapeHTML(tag)}</span>`).join('') : ''}
+          ${card.tags ? card.tags.map(tag => `<button type="button" class="card-tag" data-tag="${escapeHTML(tag)}">${escapeHTML(tag)}</button>`).join('') : ''}
         </div>
         ${card.memo ? `<p class="card-memo">${escapeHTML(card.memo)}</p>` : ''}
       </div>
@@ -2021,8 +2145,30 @@ function registerEventListeners() {
     STATE.selectedTag = item.dataset.tag;
     document.querySelectorAll('.tag-filter-item').forEach(el => el.classList.remove('active'));
     item.classList.add('active');
-    
+
     renderApp();
+  });
+
+  // 名刺カード上のタグタップ → そのタグでのフィルターモードへジャンプ。
+  // ランキング1位バッジタップ → 該当モードのランキング画面へジャンプ
+  elements.cardDeck.addEventListener('click', (e) => {
+    const tagBtn = e.target.closest('.card-tag');
+    if (tagBtn) {
+      e.stopPropagation();
+      STATE.selectedTag = tagBtn.dataset.tag;
+      renderApp();
+      return;
+    }
+
+    const badgeBtn = e.target.closest('.card-rank-badge');
+    if (badgeBtn) {
+      e.stopPropagation();
+      const jump = badgeBtn.dataset.jump;
+      if (jump === 'derby') goToDerbyRankingFromMain();
+      else if (jump === 'duel') goToDuelRankingFromMain();
+      else if (jump === 'kassenTag') goToKassenRankingFromMain('tag');
+      else if (jump === 'kassenInitial') goToKassenRankingFromMain('initial');
+    }
   });
 
   // カルーセルナビゲーションボタン（左右クリック）
@@ -2145,7 +2291,7 @@ function registerEventListeners() {
   elements.btnKassen.addEventListener('click', openKassenMode);
   elements.btnCloseKassen.addEventListener('click', () => {
     showScreen('screen-main');
-    updateMissionsGlow();
+    renderApp();
   });
 
   // 合戦モード：ランキング表示の切り替え（トグル）
@@ -2217,7 +2363,7 @@ function registerEventListeners() {
   elements.btnDuel.addEventListener('click', openDuelMode);
   elements.btnCloseDuel.addEventListener('click', () => {
     showScreen('screen-main');
-    updateMissionsGlow();
+    renderApp();
   });
 
   // デュエルモード：ランキング表示の切り替え（トグル）
@@ -2241,7 +2387,7 @@ function registerEventListeners() {
   elements.btnDerby.addEventListener('click', openDerbyMode);
   elements.btnCloseDerby.addEventListener('click', () => {
     showScreen('screen-main');
-    updateMissionsGlow();
+    renderApp();
   });
   elements.btnStartDerby.addEventListener('click', startDerbyRace);
   elements.btnDerbyReselect.addEventListener('click', drawDerbyLineup);
@@ -2617,6 +2763,21 @@ const MISSION_BASE_CATEGORIES = [
     lockedStatusKey: 'missionLockedDuel',
   },
   {
+    key: 'derbyBattles',
+    thresholds: [1, 5, 10, 25, 50],
+    getCount: () => STATE.derbyBattleCount || 0,
+    getThresholdLabel: threshold => t('missionThresholdDerbyBattles', { count: threshold }),
+    lockedStatusKey: 'missionLockedDerby',
+  },
+  {
+    // ダービーモードで、最もポイントを稼いだ名刺のポイント数
+    key: 'derbyMaxPoints',
+    thresholds: [10, 20],
+    getCount: () => STATE.cards.reduce((max, card) => Math.max(max, getCardDerbyPoints(card)), 0),
+    getThresholdLabel: threshold => t('missionMaxPointsDerby', { count: threshold }),
+    lockedStatusKey: 'missionLockedDerby',
+  },
+  {
     // タグモードの地図上のヘックス総数（複数タグ持ちの名刺は複数ヘックスとしてカウントされる）
     key: 'hexCount',
     thresholds: [100],
@@ -2912,8 +3073,8 @@ function showKassenView(view) {
 
 // 累計MVP数の降順（同数なら登録年月が古い方、さらに同じならアルファベット順）でランキングを算出する。
 // MVP未獲得（0回）の名刺はランキング対象外で、上位20名まで表示する。
-function getKassenRanking() {
-  const mode = STATE.kassenMode;
+// mode省略時は現在合戦モード画面で選択中のモードを使う（タグ/イニシャルを個別に指定して呼ぶことも可能）
+function getKassenRanking(mode = STATE.kassenMode) {
   return STATE.cards
     .filter(card => getCardMvpCount(card, mode) >= 1)
     .slice()
@@ -3426,6 +3587,9 @@ async function startKassen() {
 
   const teamMap = buildKassenTeams(STATE.kassenMode);
   const teamKeys = [...teamMap.keys()];
+  // ヘックスの塗り色はrenderKassenMap()と同じ「五十音順」の並びを基準に決めているため、
+  // 陣取りで色を塗り替える際もこちらを使う（脱落順のシャッフル配列とは別物）
+  const sortedTeamKeys = [...teamMap.keys()].sort((a, b) => a.localeCompare(b, 'ja'));
 
   // シャッフルして脱落順を決定する（最後に残った1チームが勝者）
   for (let i = teamKeys.length - 1; i > 0; i--) {
@@ -3434,6 +3598,33 @@ async function startKassen() {
   }
   const winningTeam = teamKeys[teamKeys.length - 1];
   const eliminationOrder = teamKeys.slice(0, teamKeys.length - 1);
+
+  // まだ残っている（脱落していない）チーム。陣取りゲームのように、脱落したチームの領地（ヘックス）は
+  // この中からランダムに選んだ1チームの色に塗り替わる（グレーアウトはしない）。
+  // 凡例（マップ下のタグ表示）は現状通り、脱落と同時にグレーにする
+  const aliveTeams = new Set(teamKeys);
+
+  // fallenTeamの領地の継承先（まだ残っているチームからランダムに1つ）を決め、
+  // その色・所属にヘックスを塗り替える。継承先チームは実況の選択にも使うため呼び出し元に返す
+  function resolveKassenTerritoryTakeover(fallenTeam) {
+    aliveTeams.delete(fallenTeam);
+    const remainingTeams = [...aliveTeams];
+    const conqueror = remainingTeams[Math.floor(Math.random() * remainingTeams.length)];
+    const conquerorColor = getKassenTeamColor(sortedTeamKeys, conqueror);
+
+    // fallenTeamの領地（既に他チームから継承済みの分も含む）をすべてconquerorの色・所属に塗り替える
+    document.querySelectorAll('.kassen-hex').forEach(hex => {
+      if (hex.dataset.team === fallenTeam) {
+        hex.dataset.team = conqueror;
+        hex.setAttribute('fill', conquerorColor);
+      }
+    });
+
+    const loserLegendItem = elements.kassenLegend.querySelector(`.kassen-legend-item[data-team="${CSS.escape(fallenTeam)}"]`);
+    if (loserLegendItem) loserLegendItem.classList.add('kassen-legend-item-loser');
+
+    return conqueror;
+  }
 
   kassenSkipRequested = false;
   setKassenControlsDisabled(true);
@@ -3444,34 +3635,35 @@ async function startKassen() {
   await kassenInterruptibleDelay(900);
 
   for (const team of eliminationOrder) {
-    if (kassenSkipRequested) break;
+    const conqueror = resolveKassenTerritoryTakeover(team);
 
-    const members = teamMap.get(team);
-    const featured = members[Math.floor(Math.random() * members.length)];
-    const templates = t('narrationTemplates');
-    const template = templates[Math.floor(Math.random() * templates.length)];
-    const teamLabel = getKassenTeamDisplayLabel(team);
-    elements.kassenCommentaryText.textContent = template.replace(/\{team\}/g, teamLabel).replace(/\{name\}/g, featured.name);
+    if (!kassenSkipRequested) {
+      // 半々の確率で「脱落」実況と「陣地拡大」実況（継承したチームをフィーチャー）を出し分ける
+      if (Math.random() < 0.5) {
+        const members = teamMap.get(team);
+        const featured = members[Math.floor(Math.random() * members.length)];
+        const templates = t('narrationTemplates');
+        const template = templates[Math.floor(Math.random() * templates.length)];
+        const teamLabel = getKassenTeamDisplayLabel(team);
+        elements.kassenCommentaryText.textContent = template.replace(/\{team\}/g, teamLabel).replace(/\{name\}/g, featured.name);
+      } else {
+        const conquerorMembers = teamMap.get(conqueror);
+        const featured = conquerorMembers[Math.floor(Math.random() * conquerorMembers.length)];
+        const templates = t('kassenTerritoryTemplates');
+        const template = templates[Math.floor(Math.random() * templates.length)];
+        const conquerorLabel = getKassenTeamDisplayLabel(conqueror);
+        elements.kassenCommentaryText.textContent = template.replace(/\{winner\}/g, conquerorLabel).replace(/\{name\}/g, featured.name);
+      }
+    }
 
-    document.querySelectorAll('.kassen-hex').forEach(hex => {
-      if (hex.dataset.team === team) hex.classList.add('kassen-hex-loser');
-    });
-    const loserLegendItem = elements.kassenLegend.querySelector(`.kassen-legend-item[data-team="${CSS.escape(team)}"]`);
-    if (loserLegendItem) loserLegendItem.classList.add('kassen-legend-item-loser');
-
-    if (kassenSkipRequested) break;
+    if (kassenSkipRequested) continue; // スキップ時は演出なしで即座に残りを解決する
     await kassenInterruptibleDelay(KASSEN_NARRATION_STEP_MS);
   }
 
-  // スキップされた場合も含め、勝者以外は必ず敗退表示に揃える。
-  // ヘックス＝配備（1つの所属）と1対1で対応しているため、そのヘックス自身の軍だけで判定すればよい。
+  // 全チームの脱落処理を終えると、上のカスケードにより全ヘックスが必然的にwinningTeamへ帰属する
   document.querySelectorAll('.kassen-hex').forEach(hex => {
-    if (hex.dataset.team === winningTeam) {
-      hex.classList.add('kassen-hex-winner');
-      hex.classList.remove('kassen-hex-loser');
-    } else {
-      hex.classList.add('kassen-hex-loser');
-    }
+    hex.classList.add('kassen-hex-winner');
+    hex.classList.remove('kassen-hex-loser');
   });
   document.querySelectorAll('.kassen-legend-item').forEach(item => {
     item.classList.toggle('kassen-legend-item-loser', item.dataset.team !== winningTeam);

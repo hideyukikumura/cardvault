@@ -608,6 +608,35 @@ body {
   border-top: 1px solid var(--border-glass);
 }
 
+/* 各モード（合戦・デュエル・ダービー）の現在のランキング1位バッジ */
+.card-rank-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.card-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.card-rank-badge i {
+  width: 12px;
+  height: 12px;
+}
+
 .card-info .name-row {
   display: flex;
   justify-content: space-between;
@@ -659,6 +688,7 @@ body {
 }
 
 .card-tag {
+  font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
   padding: 4px 10px;
@@ -666,6 +696,7 @@ body {
   background: rgba(99, 102, 241, 0.15);
   color: #a5b4fc;
   border: 1px solid rgba(99, 102, 241, 0.3);
+  cursor: pointer;
 }
 
 .card-memo {
