@@ -273,6 +273,15 @@
           </div>
 
           <div class="settings-section glass-card">
+            <h3 data-i18n="headingUpgradeSection">アップグレード</h3>
+            <p class="section-desc" id="settings-upgrade-status">現在、名刺登録は10枚までの無料版です。</p>
+            <button id="btn-open-upgrade" class="btn btn-primary btn-block">
+              <i data-lucide="sparkles"></i>
+              <span data-i18n="btnOpenUpgrade">アップグレードして上限解除</span>
+            </button>
+          </div>
+
+          <div class="settings-section glass-card">
             <h3 data-i18n="headingStorageFolder">保存先フォルダ</h3>
             <p class="section-desc" data-i18n="storageFolderDesc">名刺データは、ご自身のGoogleドライブ内で選択したフォルダに保存されます。</p>
             <div class="folder-info">
@@ -554,6 +563,42 @@
         </div>
       </div>
     </section>
+
+    <!-- 8. UPGRADE SCREEN (名刺登録上限解除の課金案内) -->
+    <section id="screen-upgrade" class="screen">
+      <div class="screen-content glass-fullscreen">
+        <header class="sub-header">
+          <button id="btn-close-upgrade" class="btn-back">
+            <i data-lucide="arrow-left"></i>
+          </button>
+          <h2 data-i18n="headingUpgrade">アップグレード</h2>
+          <div></div>
+        </header>
+
+        <div class="upgrade-container">
+          <div class="upgrade-icon">
+            <i data-lucide="sparkles"></i>
+          </div>
+          <h3 data-i18n="upgradeLimitTitle">無料版は名刺10枚までです</h3>
+          <p class="upgrade-desc" data-i18n="upgradeLimitDesc">アップグレードすると、名刺の登録上限がなくなり、何枚でも登録できるようになります。</p>
+
+          <button id="btn-purchase-upgrade" class="btn btn-primary btn-lg btn-block">
+            <i data-lucide="unlock"></i>
+            <span id="upgrade-price-label" data-i18n="btnUpgradePurchase">アップグレード</span>
+          </button>
+
+          <p id="upgrade-unavailable-note" class="upgrade-note hidden" data-i18n="upgradeUnavailableNote">この環境では購入機能をご利用いただけません（Playストア版アプリでのみご利用いただけます）</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 名刺タップで開く拡大表示（ピンチで拡大縮小、タップで閉じる） -->
+    <div id="card-zoom-overlay" class="card-zoom-overlay hidden">
+      <div id="card-zoom-viewport" class="card-zoom-viewport">
+        <div id="card-zoom-spinner" class="spinner hidden"></div>
+        <img id="card-zoom-image" class="card-zoom-image hidden" src="" alt="">
+      </div>
+    </div>
 
     <!-- 全画面ローディングオーバーレイ -->
     <div id="loading-overlay" class="loading-overlay hidden">

@@ -53,6 +53,9 @@ let STATE = {
   // ダービーモードで現在抽選されている出走者6名とレース進行状況（画面を開くたびにリセットされる一時状態。Google Driveには保存しない）
   // progress: 各ゲート（出走者インデックス）ごとの周回進捗（0〜1）。finishOrder: ゴールした順にゲートインデックスを記録
   derby: { cards: [], progress: [], finishOrder: [], racing: false },
+  // 名刺登録上限解除（アプリ内課金）を購入済みかどうか。起動直後はこの端末での直近の確認結果を暫定表示し、
+  // checkProEntitlement()でGoogle Play Billingの実際の購入状況に基づいて確定させる
+  isPro: localStorage.getItem('isPro') === '1',
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -63,6 +66,12 @@ const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 // Google Picker API用のAPIキー（HTTPリファラー制限・Picker APIのみに制限済みのため、公開して問題ない）
 const GOOGLE_PICKER_API_KEY = 'AIzaSyC9UqDIBywV5jYaT_qjLwB0iEPXXt7SfKM';
+
+// 無料版で登録できる名刺の上限。これを超える新規登録にはアップグレード（アプリ内課金）が必要
+const CARD_FREE_LIMIT = 10;
+// Google Play Consoleで作成するアプリ内アイテム（名刺登録上限解除）のプロダクトID。
+// Play Console側の設定と必ず一致させること
+const IAP_UNLOCK_PRODUCT_ID = 'unlock_unlimited_cards';
 
 // -------------------------------------------------------------
 // I18N（UIの表示言語のみ切り替える。名刺データ自体は翻訳しない）
@@ -109,6 +118,17 @@ const I18N = {
     ],
     titleMissions: 'ミッション',
     headingMissions: 'ミッション',
+    headingUpgrade: 'アップグレード',
+    upgradeLimitTitle: '無料版は名刺10枚までです',
+    upgradeLimitDesc: 'アップグレードすると、名刺の登録上限がなくなり、何枚でも登録できるようになります。',
+    btnUpgradePurchase: 'アップグレード',
+    upgradeUnavailableNote: 'この環境では購入機能をご利用いただけません（Playストア版アプリでのみご利用いただけます）',
+    toastUpgradeSuccess: 'アップグレードが完了しました。名刺登録の上限がなくなりました！',
+    toastUpgradeError: '購入処理中にエラーが発生しました',
+    headingUpgradeSection: 'アップグレード',
+    btnOpenUpgrade: 'アップグレードして上限解除',
+    settingsUpgradeFreeDesc: `現在、名刺登録は${CARD_FREE_LIMIT}枚までの無料版です。`,
+    settingsUpgradeProDesc: '✨ アップグレード済みです。名刺は上限なく登録できます。',
     missionThreshold: '{count}枚登録',
     missionDailyRegistration: '1日に{count}枚登録',
     missionCardsWithMemo10: 'メモありで名刺を10枚登録',
@@ -355,6 +375,17 @@ const I18N = {
     ],
     titleMissions: 'Missions',
     headingMissions: 'Missions',
+    headingUpgrade: 'Upgrade',
+    upgradeLimitTitle: 'The free version is limited to 10 cards',
+    upgradeLimitDesc: 'Upgrading removes the card limit, letting you register as many cards as you like.',
+    btnUpgradePurchase: 'Upgrade',
+    upgradeUnavailableNote: 'Purchases aren\'t available in this environment (only in the Play Store app)',
+    toastUpgradeSuccess: 'Upgrade complete. The card limit has been removed!',
+    toastUpgradeError: 'An error occurred during the purchase',
+    headingUpgradeSection: 'Upgrade',
+    btnOpenUpgrade: 'Upgrade to remove the limit',
+    settingsUpgradeFreeDesc: `You're currently on the free version, limited to ${CARD_FREE_LIMIT} cards.`,
+    settingsUpgradeProDesc: '✨ You\'re upgraded — no card limit.',
     missionThreshold: '{count}-card milestone',
     missionDailyRegistration: 'Register {count} cards in one day',
     missionCardsWithMemo10: 'Register 10 cards with a memo',
@@ -606,6 +637,7 @@ function applyLanguage(lang) {
   if (!STATE.user) {
     elements.userName.textContent = t('notSignedIn');
   }
+  updateUpgradeSectionDisplay();
 
   // 動的に生成される画面（一覧・タグフィルター・追加/編集画面）を現在の言語で再描画
   updateSortButtonUI();
@@ -762,6 +794,18 @@ const elements = {
   btnDerbyReselect: document.getElementById('btn-derby-reselect'),
   derbyBattleCount: document.getElementById('derby-battle-count'),
   derbyScreenContent: document.querySelector('#screen-derby .screen-content'),
+  // Upgrade / Paywall Screen（名刺登録上限解除の課金案内）
+  settingsUpgradeStatus: document.getElementById('settings-upgrade-status'),
+  btnOpenUpgrade: document.getElementById('btn-open-upgrade'),
+  btnCloseUpgrade: document.getElementById('btn-close-upgrade'),
+  btnPurchaseUpgrade: document.getElementById('btn-purchase-upgrade'),
+  upgradePriceLabel: document.getElementById('upgrade-price-label'),
+  upgradeUnavailableNote: document.getElementById('upgrade-unavailable-note'),
+  // Card Zoom Overlay（名刺タップでの拡大表示）
+  cardZoomOverlay: document.getElementById('card-zoom-overlay'),
+  cardZoomViewport: document.getElementById('card-zoom-viewport'),
+  cardZoomImage: document.getElementById('card-zoom-image'),
+  cardZoomSpinner: document.getElementById('card-zoom-spinner'),
   // Common UI
   loadingOverlay: document.getElementById('loading-overlay'),
   loadingText: document.getElementById('loading-text'),
@@ -787,6 +831,9 @@ function initApp() {
   registerEventListeners();
 
   initGoogleAuth();
+
+  // 実際の購入状況（Google Play Billing）をバックグラウンドで確認
+  checkProEntitlement();
 
   // セッション有効性のチェック
   checkSession();
@@ -1417,10 +1464,7 @@ function renderCards() {
     // イベント割り当て
     const emptyAddBtn = document.getElementById('btn-empty-add-action');
     if (emptyAddBtn) {
-      emptyAddBtn.addEventListener('click', () => {
-        resetAddForm();
-        showScreen('screen-add');
-      });
+      emptyAddBtn.addEventListener('click', openAddCardScreen);
     }
     lucide.createIcons();
     return;
@@ -1467,6 +1511,11 @@ function renderCards() {
     `;
 
     container.appendChild(cardEl);
+
+    // 名刺画像タップで拡大表示を開く
+    cardEl.querySelector('.card-image-wrapper').addEventListener('click', () => {
+      openCardZoom(card);
+    });
   });
 
   // 編集アイコンのイベント
@@ -1582,6 +1631,148 @@ async function loadVisibleImages() {
   });
 }
 
+// -------------------------------------------------------------
+// CARD ZOOM（名刺タップでの拡大表示。ピンチで拡大縮小、タップで閉じる）
+// -------------------------------------------------------------
+const CARD_ZOOM_MIN_SCALE = 1;
+const CARD_ZOOM_MAX_SCALE = 4;
+const CARD_ZOOM_TAP_THRESHOLD = 10; // この距離（px）以上動いたらタップではなくドラッグ／ピンチとみなす
+
+const cardZoomState = {
+  pointers: new Map(),   // pointerId -> {x, y}
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+  panStart: null,        // パン開始時の {x, y, translateX, translateY}
+  pinchStartDistance: 0,
+  pinchStartScale: 1,
+  moved: false           // タップと判定してよいか（true=ドラッグ／ピンチとみなし、タップでは閉じない）
+};
+
+function getCardZoomPointerDistance() {
+  const pts = Array.from(cardZoomState.pointers.values());
+  const dx = pts[0].x - pts[1].x;
+  const dy = pts[0].y - pts[1].y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function applyCardZoomTransform() {
+  elements.cardZoomImage.style.transform =
+    `translate(${cardZoomState.translateX}px, ${cardZoomState.translateY}px) scale(${cardZoomState.scale})`;
+}
+
+function resetCardZoomState() {
+  cardZoomState.pointers.clear();
+  cardZoomState.scale = 1;
+  cardZoomState.translateX = 0;
+  cardZoomState.translateY = 0;
+  cardZoomState.panStart = null;
+  cardZoomState.pinchStartDistance = 0;
+  cardZoomState.pinchStartScale = 1;
+  cardZoomState.moved = false;
+  applyCardZoomTransform();
+}
+
+// 名刺画像タップで拡大表示を開く
+async function openCardZoom(card) {
+  if (!card.imageId) return;
+
+  resetCardZoomState();
+  elements.cardZoomOverlay.classList.remove('hidden');
+
+  // 既にキャッシュ済みならすぐ表示、未取得ならスピナーを見せつつ取得する
+  const cachedUrl = STATE.imageCache[card.imageId];
+  if (cachedUrl) {
+    elements.cardZoomImage.src = cachedUrl;
+    elements.cardZoomImage.classList.remove('hidden');
+    elements.cardZoomSpinner.classList.add('hidden');
+  } else {
+    elements.cardZoomImage.classList.add('hidden');
+    elements.cardZoomSpinner.classList.remove('hidden');
+    const imageUrl = await fetchCardImage(card.imageId);
+    if (!elements.cardZoomOverlay.classList.contains('hidden') && imageUrl) {
+      elements.cardZoomImage.src = imageUrl;
+      elements.cardZoomImage.classList.remove('hidden');
+      elements.cardZoomSpinner.classList.add('hidden');
+    }
+  }
+}
+
+function closeCardZoom() {
+  elements.cardZoomOverlay.classList.add('hidden');
+  elements.cardZoomImage.src = '';
+  resetCardZoomState();
+}
+
+elements.cardZoomViewport.addEventListener('pointerdown', (e) => {
+  cardZoomState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (cardZoomState.pointers.size === 1) {
+    cardZoomState.panStart = {
+      x: e.clientX,
+      y: e.clientY,
+      translateX: cardZoomState.translateX,
+      translateY: cardZoomState.translateY
+    };
+  } else if (cardZoomState.pointers.size === 2) {
+    cardZoomState.pinchStartDistance = getCardZoomPointerDistance();
+    cardZoomState.pinchStartScale = cardZoomState.scale;
+  }
+
+  // 一部の環境（合成イベント等）ではsetPointerCaptureが例外を投げることがあるが、
+  // 上記の状態は既に確定済みのため、ここで失敗しても実害はない
+  try {
+    elements.cardZoomViewport.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // no-op
+  }
+});
+
+elements.cardZoomViewport.addEventListener('pointermove', (e) => {
+  if (!cardZoomState.pointers.has(e.pointerId)) return;
+  cardZoomState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (cardZoomState.pointers.size === 2) {
+    // ピンチで拡大縮小
+    const distance = getCardZoomPointerDistance();
+    if (cardZoomState.pinchStartDistance > 0) {
+      const rawScale = cardZoomState.pinchStartScale * (distance / cardZoomState.pinchStartDistance);
+      cardZoomState.scale = Math.max(CARD_ZOOM_MIN_SCALE, Math.min(CARD_ZOOM_MAX_SCALE, rawScale));
+      applyCardZoomTransform();
+    }
+    cardZoomState.moved = true;
+  } else if (cardZoomState.pointers.size === 1 && cardZoomState.panStart) {
+    const dx = e.clientX - cardZoomState.panStart.x;
+    const dy = e.clientY - cardZoomState.panStart.y;
+    if (Math.abs(dx) > CARD_ZOOM_TAP_THRESHOLD || Math.abs(dy) > CARD_ZOOM_TAP_THRESHOLD) {
+      cardZoomState.moved = true;
+    }
+    // 拡大中のみドラッグでパン（等倍時はパンせず、タップ判定のみ行う）
+    if (cardZoomState.scale > CARD_ZOOM_MIN_SCALE) {
+      cardZoomState.translateX = cardZoomState.panStart.translateX + dx;
+      cardZoomState.translateY = cardZoomState.panStart.translateY + dy;
+      applyCardZoomTransform();
+    }
+  }
+});
+
+function handleCardZoomPointerEnd(e) {
+  cardZoomState.pointers.delete(e.pointerId);
+
+  if (cardZoomState.pointers.size === 0) {
+    // 拡大縮小・ドラッグを伴わない単純なタップの場合のみ、メイン画面へ戻る
+    if (!cardZoomState.moved) {
+      closeCardZoom();
+    } else {
+      cardZoomState.moved = false;
+      cardZoomState.panStart = null;
+    }
+  }
+}
+
+elements.cardZoomViewport.addEventListener('pointerup', handleCardZoomPointerEnd);
+elements.cardZoomViewport.addEventListener('pointercancel', handleCardZoomPointerEnd);
+
 // 名刺削除処理
 async function deleteCard(cardId) {
   showLoading(t('loadingDeleting'));
@@ -1650,6 +1841,127 @@ async function openEditCard(cardId) {
 }
 
 // -------------------------------------------------------------
+// IN-APP PURCHASE（名刺登録上限解除。Google Play BillingをDigital Goods API経由で利用）
+// -------------------------------------------------------------
+let digitalGoodsService = null;
+
+// この環境（Playストア経由でインストールされたTWA）でGoogle Play Billingが使えるかどうかを確認し、
+// 使える場合はDigitalGoodsServiceを初期化する。通常のブラウザ等、非対応の環境ではnullを返す
+async function initDigitalGoodsService() {
+  if (digitalGoodsService) return digitalGoodsService;
+  if (!('getDigitalGoodsService' in window)) return null;
+  try {
+    digitalGoodsService = await window.getDigitalGoodsService('https://play.google.com/billing');
+    return digitalGoodsService;
+  } catch (err) {
+    console.warn('Digital Goods API is not available in this environment:', err);
+    return null;
+  }
+}
+
+// 実際の購入状況（Google Play Billing）を確認し、STATE.isProを確定させる。アプリ起動時に一度呼び出す。
+// 取得に失敗した場合は、前回この端末で確認できていたキャッシュ値（localStorage）をそのまま維持する
+async function checkProEntitlement() {
+  const service = await initDigitalGoodsService();
+  if (!service) return;
+
+  try {
+    const purchases = await service.listPurchases();
+    const owned = purchases.some(p => p.itemId === IAP_UNLOCK_PRODUCT_ID);
+    STATE.isPro = owned;
+    localStorage.setItem('isPro', owned ? '1' : '0');
+  } catch (err) {
+    console.error('Failed to check purchase status:', err);
+  }
+}
+
+// 設定画面の「アップグレード」欄を、現在の購入状態（STATE.isPro）に応じて更新する
+function updateUpgradeSectionDisplay() {
+  elements.settingsUpgradeStatus.textContent = STATE.isPro ? t('settingsUpgradeProDesc') : t('settingsUpgradeFreeDesc');
+  elements.btnOpenUpgrade.classList.toggle('hidden', STATE.isPro);
+}
+
+// アップグレード画面で「閉じる」を押した際、開いた場所（メイン画面／設定画面）へ正しく戻すための記録
+let upgradeScreenReturnTo = 'screen-main';
+
+function openUpgradeScreen(returnTo) {
+  upgradeScreenReturnTo = returnTo;
+  showScreen('screen-upgrade');
+  loadUpgradeScreenDetails();
+}
+
+// 新規登録画面を開く。無料版の上限（CARD_FREE_LIMIT）に達している場合はアップグレード画面へ誘導する
+function openAddCardScreen() {
+  if (!STATE.isPro && STATE.cards.length >= CARD_FREE_LIMIT) {
+    openUpgradeScreen('screen-main');
+    return;
+  }
+  resetAddForm();
+  showScreen('screen-add');
+}
+
+// アップグレード画面を開くたびに、可能であればPlay Consoleに登録された実際の価格を反映する
+async function loadUpgradeScreenDetails() {
+  elements.upgradePriceLabel.textContent = t('btnUpgradePurchase');
+  elements.upgradeUnavailableNote.classList.add('hidden');
+
+  const service = await initDigitalGoodsService();
+  if (!service) {
+    elements.upgradeUnavailableNote.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const details = await service.getDetails([IAP_UNLOCK_PRODUCT_ID]);
+    const item = details && details[0];
+    if (item && item.price) {
+      elements.upgradePriceLabel.textContent = `${t('btnUpgradePurchase')} (${item.price.value} ${item.price.currency})`;
+    }
+  } catch (err) {
+    console.error('Failed to fetch product details:', err);
+  }
+}
+
+// アップグレード（名刺登録上限解除）の購入フローを開始する
+async function purchaseUpgrade() {
+  if (STATE.isPro) return;
+
+  const service = await initDigitalGoodsService();
+  if (!service || !('PaymentRequest' in window)) {
+    elements.upgradeUnavailableNote.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const details = await service.getDetails([IAP_UNLOCK_PRODUCT_ID]);
+    const item = details && details[0];
+    if (!item) {
+      showToast(t('toastUpgradeError'));
+      return;
+    }
+
+    const request = new PaymentRequest(
+      [{ supportedMethods: 'https://play.google.com/billing', data: { sku: IAP_UNLOCK_PRODUCT_ID } }],
+      { total: { label: item.title, amount: { currency: item.price.currency, value: item.price.value } } }
+    );
+
+    const paymentResponse = await request.show();
+    await paymentResponse.complete('success');
+    await service.acknowledge(paymentResponse.details.token, 'onetime');
+
+    STATE.isPro = true;
+    localStorage.setItem('isPro', '1');
+    showToast(t('toastUpgradeSuccess'));
+    showScreen('screen-main');
+    renderApp();
+  } catch (err) {
+    if (err.name === 'AbortError') return; // ユーザーによるキャンセル
+    console.error('Purchase failed:', err);
+    showToast(t('toastUpgradeError'));
+  }
+}
+
+// -------------------------------------------------------------
 // NEW CARD REGISTRATION (新規登録)
 // -------------------------------------------------------------
 function registerEventListeners() {
@@ -1660,12 +1972,21 @@ function registerEventListeners() {
   elements.btnSync.addEventListener('click', syncWithDrive);
   elements.btnSettings.addEventListener('click', () => {
     updateFolderNameDisplay();
+    updateUpgradeSectionDisplay();
     showScreen('screen-settings');
   });
-  elements.btnAddCard.addEventListener('click', () => {
-    resetAddForm();
-    showScreen('screen-add');
+  elements.btnAddCard.addEventListener('click', openAddCardScreen);
+
+  // 設定画面：アップグレード画面を開く
+  elements.btnOpenUpgrade.addEventListener('click', () => {
+    openUpgradeScreen('screen-settings');
   });
+
+  // アップグレード画面：閉じる（開いた場所へ戻る）・購入
+  elements.btnCloseUpgrade.addEventListener('click', () => {
+    showScreen(upgradeScreenReturnTo);
+  });
+  elements.btnPurchaseUpgrade.addEventListener('click', purchaseUpgrade);
 
   // 検索・クリア
   elements.searchInput.addEventListener('input', () => {
