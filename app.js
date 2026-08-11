@@ -235,8 +235,8 @@ const I18N = {
     headingKassenRanking: 'MVPランキング',
     kassenRankingEmpty: 'まだMVPが選ばれていません',
     kassenRankingCount: '{count}pt',
-    kassenAnniversaryLabel: '🎉 10回記念大会ボーナス！',
-    kassenCentennialLabel: '🎊 100回記念大会ボーナス！',
+    kassenAnniversaryLabel: '🎉 {count}回記念大会ボーナス！',
+    kassenCentennialLabel: '🎊 {count}回記念大会ボーナス！',
     confirmKassenRegenerate: '現在の地形をリセットして新しい地形にします。よろしいですか？',
     btnYes: 'はい',
     btnNo: 'いいえ',
@@ -517,8 +517,8 @@ const I18N = {
     headingKassenRanking: 'MVP Ranking',
     kassenRankingEmpty: 'No MVPs have been awarded yet',
     kassenRankingCount: '{count}pt',
-    kassenAnniversaryLabel: '🎉 10-Battle Anniversary Bonus!',
-    kassenCentennialLabel: '🎊 100-Battle Anniversary Bonus!',
+    kassenAnniversaryLabel: '🎉 {count}-Battle Anniversary Bonus!',
+    kassenCentennialLabel: '🎊 {count}-Battle Anniversary Bonus!',
     confirmKassenRegenerate: 'This will reset the current terrain and generate a new layout. Continue?',
     btnYes: 'Yes',
     btnNo: 'No',
@@ -842,6 +842,7 @@ const elements = {
   derbyLineup: document.getElementById('derby-lineup'),
   btnStartDerby: document.getElementById('btn-start-derby'),
   btnDerbyReselect: document.getElementById('btn-derby-reselect'),
+  derbyBonusBadge: document.getElementById('derby-bonus-badge'),
   derbyBattleCount: document.getElementById('derby-battle-count'),
   derbyScreenContent: document.querySelector('#screen-derby .screen-content'),
   // Upgrade / Paywall Screen（名刺登録上限解除の課金案内）
@@ -3684,10 +3685,10 @@ async function startKassen() {
   incrementCardMvpCount(mvp, STATE.kassenMode, mvpPoints);
   saveMetadata().catch(err => console.error('MVP集計の保存に失敗しました:', err));
 
-  await showKassenResult(winningTeam, mvp, mvpPoints, isAnniversaryBattle, isCentennialBattle);
+  await showKassenResult(winningTeam, mvp, mvpPoints, isAnniversaryBattle, isCentennialBattle, battleNumber);
 }
 
-async function showKassenResult(team, mvp, points, isAnniversaryBattle, isCentennialBattle) {
+async function showKassenResult(team, mvp, points, isAnniversaryBattle, isCentennialBattle, battleNumber) {
   let imageUrl = '';
   if (mvp.imageId) {
     imageUrl = await fetchCardImage(mvp.imageId);
@@ -3696,8 +3697,8 @@ async function showKassenResult(team, mvp, points, isAnniversaryBattle, isCenten
   elements.kassenResult.innerHTML = `
     <div class="kassen-result-card glass-card">
       <div class="kassen-result-badge">${t('kassenResultBadge', { team: escapeHTML(getKassenTeamDisplayLabel(team)) })}</div>
-      ${isCentennialBattle ? `<div class="kassen-anniversary-badge kassen-centennial-badge">${t('kassenCentennialLabel')}</div>` : ''}
-      ${isAnniversaryBattle ? `<div class="kassen-anniversary-badge">${t('kassenAnniversaryLabel')}</div>` : ''}
+      ${isCentennialBattle ? `<div class="kassen-anniversary-badge kassen-centennial-badge">${t('kassenCentennialLabel', { count: battleNumber })}</div>` : ''}
+      ${isAnniversaryBattle ? `<div class="kassen-anniversary-badge">${t('kassenAnniversaryLabel', { count: battleNumber })}</div>` : ''}
       <button type="button" id="kassen-mvp-link" class="kassen-mvp kassen-mvp-clickable" title="${t('kassenMvpTitle')}">
         <div class="kassen-mvp-image-wrapper">
           ${imageUrl ? `<img src="${imageUrl}" alt="${escapeHTML(mvp.name)}">` : '<i data-lucide="user"></i>'}
@@ -3930,12 +3931,12 @@ async function spinDuelSlotMachine() {
   elements.btnStartDuel.classList.remove('hidden');
 }
 
-async function showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel) {
+async function showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel, battleNumber) {
   elements.duelResult.innerHTML = `
     <div class="kassen-result-card glass-card">
       <div class="kassen-result-badge">${t('duelResultBadge', { name: escapeHTML(winnerCard.name) })}</div>
-      ${isCentennialDuel ? `<div class="kassen-anniversary-badge kassen-centennial-badge">${t('kassenCentennialLabel')}</div>` : ''}
-      ${isAnniversaryDuel ? `<div class="kassen-anniversary-badge">${t('kassenAnniversaryLabel')}</div>` : ''}
+      ${isCentennialDuel ? `<div class="kassen-anniversary-badge kassen-centennial-badge">${t('kassenCentennialLabel', { count: battleNumber })}</div>` : ''}
+      ${isAnniversaryDuel ? `<div class="kassen-anniversary-badge">${t('kassenAnniversaryLabel', { count: battleNumber })}</div>` : ''}
       <button type="button" id="duel-winner-link" class="kassen-mvp kassen-mvp-clickable" title="${t('kassenMvpTitle')}">
         <div class="kassen-mvp-image-wrapper">
           <i data-lucide="user"></i>
@@ -4019,7 +4020,7 @@ async function startDuel() {
   saveMetadata().catch(err => console.error('デュエル結果の保存に失敗しました:', err));
   if (STATE.duelView === 'ranking') renderDuelRanking();
 
-  await showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel);
+  await showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennialDuel, battleNumber);
 
   elements.btnDuelReselect.classList.remove('hidden');
   setDuelControlsDisabled(false);
@@ -4318,6 +4319,8 @@ function drawDerbyLineup() {
   elements.btnDerbyReselect.classList.toggle('hidden', notEnough);
   elements.derbyCommentary.classList.add('hidden');
   elements.derbyCommentaryText.textContent = '';
+  elements.derbyBonusBadge.classList.add('hidden');
+  elements.derbyBonusBadge.innerHTML = '';
 
   if (picked) {
     elements.btnStartDerby.disabled = false;
@@ -4423,8 +4426,15 @@ async function startDerbyRace() {
   const winnerTemplate = winnerTemplates[Math.floor(Math.random() * winnerTemplates.length)];
   elements.derbyCommentaryText.textContent = winnerTemplate.replace(/\{name\}/g, winnerCard.name);
 
-  if (isCentennialDerby) showToast(t('kassenCentennialLabel'));
-  else if (isAnniversaryDerby) showToast(t('kassenAnniversaryLabel'));
+  // 記念大会ボーナスは、他モード同様ポップアップ（トースト）ではなく、
+  // 出走者再抽選ボタンと1着の間にバッジとして表示する
+  if (isCentennialDerby) {
+    elements.derbyBonusBadge.innerHTML = `<div class="kassen-anniversary-badge kassen-centennial-badge">${t('kassenCentennialLabel', { count: battleNumber })}</div>`;
+    elements.derbyBonusBadge.classList.remove('hidden');
+  } else if (isAnniversaryDerby) {
+    elements.derbyBonusBadge.innerHTML = `<div class="kassen-anniversary-badge">${t('kassenAnniversaryLabel', { count: battleNumber })}</div>`;
+    elements.derbyBonusBadge.classList.remove('hidden');
+  }
 
   STATE.derby.racing = false;
   elements.btnDerbyReselect.classList.remove('hidden');
