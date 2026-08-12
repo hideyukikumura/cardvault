@@ -52,7 +52,9 @@ let STATE = {
   duel: { left: null, right: null, netScore: 0, winner: null, inProgress: false },
   // ダービーモードで現在抽選されている出走者6名とレース進行状況（画面を開くたびにリセットされる一時状態。Google Driveには保存しない）
   // progress: 各ゲート（出走者インデックス）ごとの周回進捗（0〜1）。finishOrder: ゴールした順にゲートインデックスを記録
-  derby: { cards: [], progress: [], finishOrder: [], racing: false },
+  // lateralPos: 「ダイナミック」表示スタイルでの横方向の見た目上の位置（0=インコース〜5=アウトコース、勝敗には無関係）
+  // spreadTargets: 終盤に広がる際の、出走者ごとのランダムな目標レーン（レースごとに再抽選）
+  derby: { cards: [], progress: [], finishOrder: [], racing: false, lateralPos: [], spreadTargets: [] },
   // 名刺登録上限解除（アプリ内課金）を購入済みかどうか。起動直後はこの端末での直近の確認結果を暫定表示し、
   // checkProEntitlement()でGoogle Play Billingの実際の購入状況に基づいて確定させる
   isPro: localStorage.getItem('isPro') === '1',
@@ -2390,6 +2392,7 @@ function registerEventListeners() {
     showScreen('screen-main');
     renderApp();
   });
+
   elements.btnStartDerby.addEventListener('click', startDerbyRace);
   elements.btnDerbyReselect.addEventListener('click', drawDerbyLineup);
 
@@ -4196,6 +4199,11 @@ function getDerbyDotPosition(laneIndex, progress) {
 }
 
 // 出走者の数（レーン数）分のトラック・スタートライン・ドットをまとめて描画する
+// 見た目上、その出走者が現在どのレーン（横方向位置）を走っているかを返す（STATE.derby.lateralPosの動的な値）
+function getDerbyEffectiveLane(i) {
+  return STATE.derby.lateralPos[i] ?? i;
+}
+
 function renderDerbyTrack() {
   const cards = STATE.derby.cards;
   const lastLane = cards.length - 1;
@@ -4211,7 +4219,7 @@ function renderDerbyTrack() {
   const startY2 = DERBY_TRACK_CENTER.cy + outerR + 5;
 
   const dotsSvg = cards.map((card, i) => {
-    const pos = getDerbyDotPosition(i, STATE.derby.progress[i] || 0);
+    const pos = getDerbyDotPosition(getDerbyEffectiveLane(i), STATE.derby.progress[i] || 0);
     const finished = (STATE.derby.progress[i] || 0) >= 1;
     return `<circle id="derby-dot-${i}" class="derby-dot${finished ? ' hidden' : ''}" cx="${pos.x}" cy="${pos.y}" r="${DERBY_DOT_RADIUS}" style="fill:var(--gate-${i + 1}-bg);"/>`;
   }).join('');
@@ -4235,10 +4243,129 @@ function updateDerbyDotPositions() {
       return;
     }
 
-    const pos = getDerbyDotPosition(i, STATE.derby.progress[i]);
+    const pos = getDerbyDotPosition(getDerbyEffectiveLane(i), STATE.derby.progress[i]);
     dot.setAttribute('cx', pos.x);
     dot.setAttribute('cy', pos.y);
   });
+}
+
+const DERBY_LATERAL_EASE_BUNCH = 0.07;  // 中盤（インコース寄せ）の目標レーンへの追従率
+const DERBY_LATERAL_EASE_SPREAD = 0.18; // 最終直線の追従率（急激な動きで重なりが起きないよう抑えめに）
+const DERBY_LATERAL_JITTER = 0.04;      // ランダムな揺らぎの強さ（自然な動きを出すため、ごく小さめ）
+const DERBY_MIN_DOT_GAP_PX = DERBY_DOT_RADIUS * 2 + 4; // 丸同士が重ならないための最小距離（直径＋余白）
+const DERBY_FINAL_STRETCH_THRESHOLD = 0.75; // 平均進捗がこれを超えたら「最終直線」演出に切り替え
+// 順位（暫定順位）ごとに割り当てる目標レーンの間隔。レーン0〜5（出走6頭分）の範囲に必ず収まるよう、
+// ちょうど1レーン分（＝隣接レーンが接する限界）にする。これより広げると6頭全員分の間隔がレーン範囲を
+// はみ出し、目標地点そのものがトラック外になってしまう
+const DERBY_SAFE_LANE_SPACING = 1;
+const DERBY_SPREAD_LANE_SPACING = DERBY_SAFE_LANE_SPACING * 1.7;
+
+// 各出走者の横方向の目標位置を決め、少しずつ近づける。
+// 中盤までは暫定順位順に安全な最小間隔でインコースから並び、最終直線では順位順にさらに広い間隔で広がる。
+// 目標位置自体が順位ごとに安全な間隔で決まるため、重なりはほぼ発生しない上、resolveDerbyDotOverlaps()が
+// 遷移中の一時的な接近もカバーする。着順（勝敗）には一切影響しない、見た目だけの演出
+function updateDerbyLateralTargets() {
+  const progress = STATE.derby.progress;
+  const avgProgress = progress.reduce((sum, p) => sum + p, 0) / progress.length;
+  const isFinalStretch = avgProgress >= DERBY_FINAL_STRETCH_THRESHOLD;
+  const ease = isFinalStretch ? DERBY_LATERAL_EASE_SPREAD : DERBY_LATERAL_EASE_BUNCH;
+  const spacing = isFinalStretch ? DERBY_SPREAD_LANE_SPACING : DERBY_SAFE_LANE_SPACING;
+
+  const ranking = progress
+    .map((p, i) => ({ i, p }))
+    .sort((a, b) => b.p - a.p);
+
+  ranking.forEach(({ i }, rankIndex) => {
+    if (progress[i] >= 1) return; // ゴール済みは動かさない
+
+    const target = isFinalStretch ? STATE.derby.spreadTargets[i] : rankIndex * spacing;
+    const pull = (target - STATE.derby.lateralPos[i]) * ease;
+    const jitter = (Math.random() - 0.5) * DERBY_LATERAL_JITTER;
+    STATE.derby.lateralPos[i] = Math.max(0, Math.min(5, STATE.derby.lateralPos[i] + pull + jitter));
+  });
+
+  resolveDerbyDotOverlaps();
+}
+
+// 実際の画面上の座標（2次元距離）を見て、丸同士が近づきすぎている場合は横方向位置（レーン）を
+// 押し合って距離を離す。各反復で全ペアの補正量を一旦集計してから同時に適用することで
+// （逐次適用だと後の補正が前の補正を打ち消し、収束しづらいことがあったため）、収束するまで反復する。
+// レーン0〜5（トラック描画範囲）の外には押し出さない。内側・外側の壁として働くため、
+// 詰まった場合は多少接近した状態のまま収まる（実際の競馬でも内柵より内側には出られない）
+function resolveDerbyDotOverlaps() {
+  const active = [];
+  for (let i = 0; i < STATE.derby.cards.length; i++) {
+    if (STATE.derby.progress[i] < 1) active.push(i);
+  }
+  const LANE_MIN = 0;
+  const LANE_MAX = STATE.derby.cards.length - 1;
+
+  for (let iter = 0; iter < 40; iter++) {
+    const deltas = {};
+    let anyPushed = false;
+
+    for (let ai = 0; ai < active.length; ai++) {
+      const a = active[ai];
+      const posA = getDerbyDotPosition(STATE.derby.lateralPos[a], STATE.derby.progress[a]);
+      for (let bi = ai + 1; bi < active.length; bi++) {
+        const b = active[bi];
+        const posB = getDerbyDotPosition(STATE.derby.lateralPos[b], STATE.derby.progress[b]);
+        const dx = posB.x - posA.x;
+        const dy = posB.y - posA.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < DERBY_MIN_DOT_GAP_PX) {
+          anyPushed = true;
+          const neededPx = DERBY_MIN_DOT_GAP_PX - dist;
+          const pushLateral = (neededPx / DERBY_LANE_TURN_R_STEP) * 0.5 + 0.03;
+          const dir = STATE.derby.lateralPos[a] <= STATE.derby.lateralPos[b] ? 1 : -1;
+          deltas[a] = (deltas[a] || 0) - dir * pushLateral;
+          deltas[b] = (deltas[b] || 0) + dir * pushLateral;
+        }
+      }
+    }
+
+    if (!anyPushed) break;
+
+    active.forEach(i => {
+      if (deltas[i]) {
+        STATE.derby.lateralPos[i] = Math.max(LANE_MIN, Math.min(LANE_MAX, STATE.derby.lateralPos[i] + deltas[i]));
+      }
+    });
+  }
+
+  // 上記の押し合いだけでは、複数組が同時に順位交代（レーンの交差）する場面などで
+  // 6頭分の余裕を持った間隔（DERBY_MIN_DOT_GAP_PX）を全ペア分確保しきれないことがある
+  // （必要な合計幅がレーン0〜5の幅を超えるため）。最後に順序どおり並べ直し、実際に丸が
+  // 重ならない最低限の間隔（レーン1つ分＝直径分。隣接レーンが接する限界）だけは必ず確保する
+  const MIN_LANE_GAP = 1;
+  const order = active.slice().sort((x, y) => STATE.derby.lateralPos[x] - STATE.derby.lateralPos[y]);
+
+  for (let i = 1; i < order.length; i++) {
+    const prev = order[i - 1], cur = order[i];
+    if (STATE.derby.lateralPos[cur] < STATE.derby.lateralPos[prev] + MIN_LANE_GAP) {
+      STATE.derby.lateralPos[cur] = STATE.derby.lateralPos[prev] + MIN_LANE_GAP;
+    }
+  }
+  if (order.length && STATE.derby.lateralPos[order[order.length - 1]] > LANE_MAX) {
+    STATE.derby.lateralPos[order[order.length - 1]] = LANE_MAX;
+    for (let i = order.length - 2; i >= 0; i--) {
+      const next = order[i + 1], cur = order[i];
+      if (STATE.derby.lateralPos[cur] > STATE.derby.lateralPos[next] - MIN_LANE_GAP) {
+        STATE.derby.lateralPos[cur] = STATE.derby.lateralPos[next] - MIN_LANE_GAP;
+      }
+    }
+  }
+}
+
+// 出走者配列をシャッフルしたインデックス順を返す（ゲート番号による偏りが出ないよう、Fisher-Yatesで公平に）
+function shuffleDerbyIndices(count) {
+  const arr = Array.from({ length: count }, (_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 // 現在の進捗（周回率）順に、出走者一覧の各行の表示位置（top）と現在順位を更新する。
@@ -4310,6 +4437,11 @@ function drawDerbyLineup() {
   STATE.derby.progress = picked ? picked.map(() => 0) : [];
   STATE.derby.finishOrder = [];
   STATE.derby.racing = false;
+  // lateralPosは自分のゲート番号（＝インコースからの並び順）からスタート。
+  // spreadTargetsは、最終直線で広がる際の目標レーンをレースごとにランダムに割り当てる
+  // （Fisher-Yatesでシャッフルするため、ゲート番号による有利不利は生まれない）
+  STATE.derby.lateralPos = picked ? picked.map((_, i) => i) : [];
+  STATE.derby.spreadTargets = picked ? shuffleDerbyIndices(picked.length) : [];
 
   const notEnough = !picked;
   elements.derbyEmptyState.classList.toggle('hidden', !notEnough);
@@ -4377,15 +4509,29 @@ async function startDerbyRace() {
 
   await new Promise((resolve) => {
     const timer = setInterval(() => {
+      // 同じtick内で複数の出走者が同時にゴールラインを超えることがあるため、
+      // ゲート番号（配列の並び順）でそのまま着順を決めると若い番号が常に有利になってしまう。
+      // そこで一旦クランプ前の生の進捗（1を超えた分）を記録し、超過が大きい＝より先に
+      // ゴールしたとみなして着順を決める
+      const newlyFinished = [];
       STATE.derby.cards.forEach((_, i) => {
         if (STATE.derby.progress[i] >= 1) return;
         const step = DERBY_PROGRESS_MIN_STEP + Math.random() * (DERBY_PROGRESS_MAX_STEP - DERBY_PROGRESS_MIN_STEP);
-        STATE.derby.progress[i] = Math.min(1, STATE.derby.progress[i] + step);
-        if (STATE.derby.progress[i] >= 1 && !STATE.derby.finishOrder.includes(i)) {
-          STATE.derby.finishOrder.push(i);
+        const rawProgress = STATE.derby.progress[i] + step;
+        STATE.derby.progress[i] = Math.min(1, rawProgress);
+        if (rawProgress >= 1) {
+          newlyFinished.push({ i, rawProgress });
         }
       });
+      newlyFinished
+        .sort((a, b) => b.rawProgress - a.rawProgress)
+        .forEach(({ i }) => {
+          if (!STATE.derby.finishOrder.includes(i)) {
+            STATE.derby.finishOrder.push(i);
+          }
+        });
 
+      updateDerbyLateralTargets();
       updateDerbyDotPositions();
       updateDerbyRaceListOrder();
 
