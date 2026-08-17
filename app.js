@@ -69,6 +69,10 @@ const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 // Google Picker API用のAPIキー（HTTPリファラー制限・Picker APIのみに制限済みのため、公開して問題ない）
 const GOOGLE_PICKER_API_KEY = 'AIzaSyC9UqDIBywV5jYaT_qjLwB0iEPXXt7SfKM';
 
+// 名刺登録上限のアプリ内課金機能を有効にするかどうか。クローズドテスト中はfalseにして、
+// テスターが上限やアップグレード画面に触れず無制限に登録できるようにする。
+// 本番公開時にtrueへ戻す
+const IAP_ENABLED = false;
 // 無料版で登録できる名刺の上限。これを超える新規登録にはアップグレード（アプリ内課金）が必要
 const CARD_FREE_LIMIT = 10;
 // Google Play Consoleで作成するアプリ内アイテム（名刺登録上限解除）のプロダクトID。
@@ -848,6 +852,7 @@ const elements = {
   derbyBattleCount: document.getElementById('derby-battle-count'),
   derbyScreenContent: document.querySelector('#screen-derby .screen-content'),
   // Upgrade / Paywall Screen（名刺登録上限解除の課金案内）
+  settingsUpgradeSection: document.getElementById('settings-upgrade-section'),
   settingsUpgradeStatus: document.getElementById('settings-upgrade-status'),
   btnOpenUpgrade: document.getElementById('btn-open-upgrade'),
   btnCloseUpgrade: document.getElementById('btn-close-upgrade'),
@@ -886,7 +891,7 @@ function initApp() {
   initGoogleAuth();
 
   // 実際の購入状況（Google Play Billing）をバックグラウンドで確認
-  checkProEntitlement();
+  if (IAP_ENABLED) checkProEntitlement();
 
   // セッション有効性のチェック
   checkSession();
@@ -2002,8 +2007,11 @@ async function checkProEntitlement() {
   }
 }
 
-// 設定画面の「アップグレード」欄を、現在の購入状態（STATE.isPro）に応じて更新する
+// 設定画面の「アップグレード」欄を、現在の購入状態（STATE.isPro）に応じて更新する。
+// IAP_ENABLEDがfalseの間（クローズドテスト中など）は欄ごと非表示にする
 function updateUpgradeSectionDisplay() {
+  elements.settingsUpgradeSection.classList.toggle('hidden', !IAP_ENABLED);
+  if (!IAP_ENABLED) return;
   elements.settingsUpgradeStatus.textContent = STATE.isPro ? t('settingsUpgradeProDesc') : t('settingsUpgradeFreeDesc');
   elements.btnOpenUpgrade.classList.toggle('hidden', STATE.isPro);
 }
@@ -2019,7 +2027,7 @@ function openUpgradeScreen(returnTo) {
 
 // 新規登録画面を開く。無料版の上限（CARD_FREE_LIMIT）に達している場合はアップグレード画面へ誘導する
 function openAddCardScreen() {
-  if (!STATE.isPro && STATE.cards.length >= CARD_FREE_LIMIT) {
+  if (IAP_ENABLED && !STATE.isPro && STATE.cards.length >= CARD_FREE_LIMIT) {
     openUpgradeScreen('screen-main');
     return;
   }
