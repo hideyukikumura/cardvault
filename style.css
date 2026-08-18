@@ -1127,6 +1127,34 @@ body {
   padding: 5px 0;
 }
 
+.new-folder-parent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+#new-folder-parent-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--accent-indigo);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 4px 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .folder-info {
   display: flex;
   align-items: center;

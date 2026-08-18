@@ -14,7 +14,7 @@ let STATE = {
   cards: [],          // すべての名刺データ
   filteredCards: [],  // 検索・フィルター後の名刺データ
   selectedTag: 'all', // 現在選択されているフィルタータグ
-  sortMode: 'newest', // 一覧の並べ替え基準（'newest' or 'alphabet'）
+  sortMode: 'newest', // 一覧の並べ替え基準（'newest' / 'alphabet' / 'yearAsc' / 'yearDesc'）
   addedTags: [],      // 新規登録フォームで一時追加中のタグリスト
   editingCardId: null, // 編集中の名刺ID（null = 新規登録モード）
   language: localStorage.getItem('language') || 'ja', // UI表示言語（'ja' or 'en'。名刺データ自体には影響しない）
@@ -173,8 +173,12 @@ const I18N = {
     titleSettings: '設定',
     titleSortNewest: '並べ替え：登録が新しい順',
     titleSortAlphabet: '並べ替え：アルファベット順',
+    titleSortYearAsc: '並べ替え：年代が古い順',
+    titleSortYearDesc: '並べ替え：年代が新しい順',
     sortPopupNewestTitle: '登録順',
     sortPopupAlphabetTitle: 'アルファベット順',
+    sortPopupYearAscTitle: '年代昇順',
+    sortPopupYearDescTitle: '年代降順',
     searchPlaceholder: '名前・アルファベットで検索...',
     tagAll: 'すべて',
     emptyNoCards: '名刺が登録されていません',
@@ -224,6 +228,9 @@ const I18N = {
     folderChoiceTitle: '保存先フォルダの選択',
     folderChoiceExisting: '既存のフォルダから選ぶ',
     folderChoiceNew: '新しいフォルダを作成',
+    myDriveRootLabel: 'マイドライブ',
+    labelNewFolderParent: '作成先：',
+    btnChangeParent: '変更',
     placeholderNewFolderName: 'フォルダ名',
     btnCreateFolder: '作成',
     btnCancel: 'キャンセル',
@@ -465,8 +472,12 @@ const I18N = {
     titleSettings: 'Settings',
     titleSortNewest: 'Sort: Newest first',
     titleSortAlphabet: 'Sort: Alphabetical',
+    titleSortYearAsc: 'Sort: Oldest era first',
+    titleSortYearDesc: 'Sort: Newest era first',
     sortPopupNewestTitle: 'Newest First',
     sortPopupAlphabetTitle: 'Alphabetical',
+    sortPopupYearAscTitle: 'Era: Ascending',
+    sortPopupYearDescTitle: 'Era: Descending',
     searchPlaceholder: 'Search by name or alphabet...',
     tagAll: 'All',
     emptyNoCards: 'No business cards yet',
@@ -516,6 +527,9 @@ const I18N = {
     folderChoiceTitle: 'Choose a storage folder',
     folderChoiceExisting: 'Choose an existing folder',
     folderChoiceNew: 'Create a new folder',
+    myDriveRootLabel: 'My Drive',
+    labelNewFolderParent: 'Location:',
+    btnChangeParent: 'Change',
     placeholderNewFolderName: 'Folder name',
     btnCreateFolder: 'Create',
     btnCancel: 'Cancel',
@@ -806,6 +820,8 @@ const elements = {
   btnFolderChoiceExisting: document.getElementById('btn-folder-choice-existing'),
   btnFolderChoiceNew: document.getElementById('btn-folder-choice-new'),
   folderChoiceNewForm: document.getElementById('folder-choice-new-form'),
+  newFolderParentName: document.getElementById('new-folder-parent-name'),
+  btnNewFolderParentChange: document.getElementById('btn-new-folder-parent-change'),
   inputNewFolderName: document.getElementById('input-new-folder-name'),
   btnFolderCreateConfirm: document.getElementById('btn-folder-create-confirm'),
   btnFolderCreateCancel: document.getElementById('btn-folder-create-cancel'),
@@ -1198,12 +1214,12 @@ async function openGoogleDrivePicker() {
   });
 }
 
-// マイドライブのルート直下に、指定した名前で新しいフォルダを作成する
-async function createDriveFolder(name) {
+// 指定した親フォルダ（省略時はマイドライブ直下）に、指定した名前で新しいフォルダを作成する
+async function createDriveFolder(name, parentId = 'root') {
   const res = await driveFetch(`${DRIVE_API_BASE}/files`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: ['root'] })
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
   });
   if (!res.ok) throw new Error('Failed to create folder');
   return res.json();
@@ -1214,6 +1230,10 @@ async function createDriveFolder(name) {
 // キャンセル時はnullを返す
 function openFolderPicker() {
   return new Promise((resolve) => {
+    // 「新しいフォルダを作成」の作成先。デフォルトはマイドライブ直下だが、
+    // 「変更」からGoogle Pickerで任意のフォルダに切り替えられる
+    let newFolderParent = { id: 'root', name: t('myDriveRootLabel') };
+
     elements.inputNewFolderName.value = '';
     elements.folderChoiceButtons.classList.remove('hidden');
     elements.folderChoiceNewForm.classList.add('hidden');
@@ -1224,6 +1244,7 @@ function openFolderPicker() {
       elements.folderChoiceOverlay.classList.add('hidden');
       elements.btnFolderChoiceExisting.removeEventListener('click', onExisting);
       elements.btnFolderChoiceNew.removeEventListener('click', onShowNewForm);
+      elements.btnNewFolderParentChange.removeEventListener('click', onChangeParent);
       elements.btnFolderCreateConfirm.removeEventListener('click', onCreateConfirm);
       elements.btnFolderCreateCancel.removeEventListener('click', onCreateCancel);
       elements.btnFolderChoiceClose.removeEventListener('click', onClose);
@@ -1235,9 +1256,20 @@ function openFolderPicker() {
     };
 
     const onShowNewForm = () => {
+      newFolderParent = { id: 'root', name: t('myDriveRootLabel') };
+      elements.newFolderParentName.textContent = newFolderParent.name;
       elements.folderChoiceButtons.classList.add('hidden');
       elements.folderChoiceNewForm.classList.remove('hidden');
       elements.inputNewFolderName.focus();
+    };
+
+    // 新規フォルダの作成先を、Google Picker経由でマイドライブ内の任意のフォルダに変更する
+    const onChangeParent = async () => {
+      const picked = await openGoogleDrivePicker();
+      if (picked) {
+        newFolderParent = picked;
+        elements.newFolderParentName.textContent = picked.name;
+      }
     };
 
     const onCreateCancel = () => {
@@ -1254,7 +1286,7 @@ function openFolderPicker() {
       cleanup();
       showLoading(t('loadingSyncing'));
       try {
-        const folder = await createDriveFolder(name);
+        const folder = await createDriveFolder(name, newFolderParent.id);
         resolve({ id: folder.id, name: folder.name });
       } catch (error) {
         console.error('Folder Create Error:', error);
@@ -1272,6 +1304,7 @@ function openFolderPicker() {
 
     elements.btnFolderChoiceExisting.addEventListener('click', onExisting);
     elements.btnFolderChoiceNew.addEventListener('click', onShowNewForm);
+    elements.btnNewFolderParentChange.addEventListener('click', onChangeParent);
     elements.btnFolderCreateConfirm.addEventListener('click', onCreateConfirm);
     elements.btnFolderCreateCancel.addEventListener('click', onCreateCancel);
     elements.btnFolderChoiceClose.addEventListener('click', onClose);
@@ -1532,18 +1565,35 @@ function renderApp() {
   updateMissionsGlow();
 }
 
+// 並べ替えボタンをタップするたびに切り替わるモードの順番
+const SORT_MODE_CYCLE = ['newest', 'alphabet', 'yearAsc', 'yearDesc'];
+const SORT_MODE_TITLE_KEYS = {
+  newest: 'titleSortNewest',
+  alphabet: 'titleSortAlphabet',
+  yearAsc: 'titleSortYearAsc',
+  yearDesc: 'titleSortYearDesc'
+};
+const SORT_MODE_POPUP_KEYS = {
+  newest: 'sortPopupNewestTitle',
+  alphabet: 'sortPopupAlphabetTitle',
+  yearAsc: 'sortPopupYearAscTitle',
+  yearDesc: 'sortPopupYearDescTitle'
+};
+
+function nextSortMode(mode) {
+  const idx = SORT_MODE_CYCLE.indexOf(mode);
+  return SORT_MODE_CYCLE[(idx + 1) % SORT_MODE_CYCLE.length];
+}
+
 // 並べ替えボタンのツールチップ表示を現在のモードに合わせて更新
 function updateSortButtonUI() {
-  elements.btnSort.title = STATE.sortMode === 'alphabet'
-    ? t('titleSortAlphabet')
-    : t('titleSortNewest');
+  elements.btnSort.title = t(SORT_MODE_TITLE_KEYS[STATE.sortMode]);
 }
 
 // 並べ替えボタン押下時、現在の並べ替えモードを画面中央に一瞬表示する
 let sortModePopupTimeout;
 function showSortModePopup() {
-  const isAlphabet = STATE.sortMode === 'alphabet';
-  elements.sortModePopupTitle.textContent = t(isAlphabet ? 'sortPopupAlphabetTitle' : 'sortPopupNewestTitle');
+  elements.sortModePopupTitle.textContent = t(SORT_MODE_POPUP_KEYS[STATE.sortMode]);
 
   // 名刺画像（読み込み中のスピナーが出る部分）の位置に合わせて表示位置を調整。
   // 画像エリアの高さはタグ数やメモの有無で名刺ごとに変わってしまうため、
@@ -1597,12 +1647,24 @@ function filterCards() {
   });
 
   // 並べ替えボタンで選択中のモードに応じてソート（タグ絞り込み後の範囲内で並べ替える）
-  if (STATE.sortMode === 'alphabet') {
-    STATE.filteredCards.sort((a, b) =>
-      (a.alphabet || '').localeCompare(b.alphabet || '', undefined, { sensitivity: 'base' })
-    );
-  } else {
-    STATE.filteredCards.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  switch (STATE.sortMode) {
+    case 'alphabet':
+      STATE.filteredCards.sort((a, b) =>
+        (a.alphabet || '').localeCompare(b.alphabet || '', undefined, { sensitivity: 'base' })
+      );
+      break;
+    case 'yearAsc':
+      STATE.filteredCards.sort((a, b) =>
+        getCardRegisteredMonth(a).localeCompare(getCardRegisteredMonth(b))
+      );
+      break;
+    case 'yearDesc':
+      STATE.filteredCards.sort((a, b) =>
+        getCardRegisteredMonth(b).localeCompare(getCardRegisteredMonth(a))
+      );
+      break;
+    default: // 'newest'
+      STATE.filteredCards.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   currentSwipeIndex = 0; // 検索時は先頭へ戻す
@@ -2256,9 +2318,9 @@ function registerEventListeners() {
     renderApp();
   });
 
-  // 並べ替え（新しい順 ⇔ アルファベット順をトグル）
+  // 並べ替え（登録順 → アルファベット順 → 年代昇順 → 年代降順 → …とタップごとに巡回）
   elements.btnSort.addEventListener('click', () => {
-    STATE.sortMode = STATE.sortMode === 'newest' ? 'alphabet' : 'newest';
+    STATE.sortMode = nextSortMode(STATE.sortMode);
     updateSortButtonUI();
     showSortModePopup();
     trackSortMissionProgress();
