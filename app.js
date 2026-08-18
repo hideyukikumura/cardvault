@@ -219,6 +219,14 @@ const I18N = {
     noFolderSelected: '未選択',
     pickerTitle: '名刺データの保存先フォルダを選択',
     toastFolderSelectionCancelled: 'フォルダが選択されなかったため、同期を中止しました',
+    folderChoiceTitle: '保存先フォルダの選択',
+    folderChoiceExisting: '既存のフォルダから選ぶ',
+    folderChoiceNew: '新しいフォルダを作成',
+    placeholderNewFolderName: 'フォルダ名',
+    btnCreateFolder: '作成',
+    btnCancel: 'キャンセル',
+    toastFolderNameRequired: 'フォルダ名を入力してください',
+    toastFolderCreateError: 'フォルダの作成に失敗しました',
     headingKassenData: '合戦データ',
     btnResetKassenHistory: '合戦履歴をリセット',
     confirmResetKassenHistory: 'すべての合戦履歴をリセットします。よろしいですか？',
@@ -501,6 +509,14 @@ const I18N = {
     noFolderSelected: 'Not selected',
     pickerTitle: 'Choose a folder to store your business card data',
     toastFolderSelectionCancelled: 'No folder was selected, so the sync was cancelled',
+    folderChoiceTitle: 'Choose a storage folder',
+    folderChoiceExisting: 'Choose an existing folder',
+    folderChoiceNew: 'Create a new folder',
+    placeholderNewFolderName: 'Folder name',
+    btnCreateFolder: 'Create',
+    btnCancel: 'Cancel',
+    toastFolderNameRequired: 'Please enter a folder name',
+    toastFolderCreateError: 'Failed to create the folder',
     headingKassenData: 'Showdown Data',
     btnResetKassenHistory: 'Reset Showdown History',
     confirmResetKassenHistory: 'This will reset all Showdown history. Continue?',
@@ -774,6 +790,15 @@ const elements = {
   btnLogout: document.getElementById('btn-logout'),
   currentFolderName: document.getElementById('current-folder-name'),
   btnChangeFolder: document.getElementById('btn-change-folder'),
+  folderChoiceOverlay: document.getElementById('folder-choice-overlay'),
+  btnFolderChoiceClose: document.getElementById('btn-folder-choice-close'),
+  folderChoiceButtons: document.getElementById('folder-choice-buttons'),
+  btnFolderChoiceExisting: document.getElementById('btn-folder-choice-existing'),
+  btnFolderChoiceNew: document.getElementById('btn-folder-choice-new'),
+  folderChoiceNewForm: document.getElementById('folder-choice-new-form'),
+  inputNewFolderName: document.getElementById('input-new-folder-name'),
+  btnFolderCreateConfirm: document.getElementById('btn-folder-create-confirm'),
+  btnFolderCreateCancel: document.getElementById('btn-folder-create-cancel'),
   langSwitch: document.getElementById('lang-switch'),
   btnResetKassenHistory: document.getElementById('btn-reset-kassen-history'),
   kassenResetConfirm: document.getElementById('kassen-reset-confirm'),
@@ -1119,10 +1144,12 @@ function loadGooglePicker() {
   return googlePickerLoadPromise;
 }
 
-// ユーザーが自身のGoogleドライブ内の任意のフォルダを保存先として選ぶ（Picker経由で選んだフォルダには
+// ユーザーが自身のGoogleドライブ内の既存フォルダを保存先として選ぶ（Picker経由で選んだフォルダには
 // drive.fileスコープのままアクセス権が付与されるため、スコープを広げる必要はない）。
-// キャンセル時はnullを返す
-async function openFolderPicker() {
+// キャンセル時はnullを返す。
+// 注：Google Picker（埋め込みウィジェット）には新規フォルダ作成ボタンが無いため、
+// 「新しいフォルダを作成」はopenFolderPicker()側でDrive APIを直接呼んで別途対応している
+async function openGoogleDrivePicker() {
   // Pickerモジュールの読み込みには通信を伴うため、その間だけローディング表示を出す。
   // 表示したままpicker.setVisible(true)まで進むと、全画面オーバーレイがPickerダイアログの
   // クリックを塞いでしまうため、Picker表示直前に必ず隠す
@@ -1158,6 +1185,86 @@ async function openFolderPicker() {
       })
       .build();
     picker.setVisible(true);
+  });
+}
+
+// マイドライブのルート直下に、指定した名前で新しいフォルダを作成する
+async function createDriveFolder(name) {
+  const res = await driveFetch(`${DRIVE_API_BASE}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', parents: ['root'] })
+  });
+  if (!res.ok) throw new Error('Failed to create folder');
+  return res.json();
+}
+
+// 保存先フォルダ選択の入り口。「既存のフォルダから選ぶ」（Google Picker）と
+// 「新しいフォルダを作成」（Drive APIで直接作成）のどちらかをユーザーに選んでもらう。
+// キャンセル時はnullを返す
+function openFolderPicker() {
+  return new Promise((resolve) => {
+    elements.inputNewFolderName.value = '';
+    elements.folderChoiceButtons.classList.remove('hidden');
+    elements.folderChoiceNewForm.classList.add('hidden');
+    elements.folderChoiceOverlay.classList.remove('hidden');
+    lucide.createIcons();
+
+    const cleanup = () => {
+      elements.folderChoiceOverlay.classList.add('hidden');
+      elements.btnFolderChoiceExisting.removeEventListener('click', onExisting);
+      elements.btnFolderChoiceNew.removeEventListener('click', onShowNewForm);
+      elements.btnFolderCreateConfirm.removeEventListener('click', onCreateConfirm);
+      elements.btnFolderCreateCancel.removeEventListener('click', onCreateCancel);
+      elements.btnFolderChoiceClose.removeEventListener('click', onClose);
+    };
+
+    const onExisting = async () => {
+      cleanup();
+      resolve(await openGoogleDrivePicker());
+    };
+
+    const onShowNewForm = () => {
+      elements.folderChoiceButtons.classList.add('hidden');
+      elements.folderChoiceNewForm.classList.remove('hidden');
+      elements.inputNewFolderName.focus();
+    };
+
+    const onCreateCancel = () => {
+      elements.folderChoiceNewForm.classList.add('hidden');
+      elements.folderChoiceButtons.classList.remove('hidden');
+    };
+
+    const onCreateConfirm = async () => {
+      const name = elements.inputNewFolderName.value.trim();
+      if (!name) {
+        showToast(t('toastFolderNameRequired'));
+        return;
+      }
+      cleanup();
+      showLoading(t('loadingSyncing'));
+      try {
+        const folder = await createDriveFolder(name);
+        resolve({ id: folder.id, name: folder.name });
+      } catch (error) {
+        console.error('Folder Create Error:', error);
+        showToast(t('toastFolderCreateError'));
+        resolve(null);
+      } finally {
+        hideLoading();
+      }
+    };
+
+    const onClose = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    elements.btnFolderChoiceExisting.addEventListener('click', onExisting);
+    elements.btnFolderChoiceNew.addEventListener('click', onShowNewForm);
+    elements.btnFolderCreateConfirm.addEventListener('click', onCreateConfirm);
+    elements.btnFolderCreateCancel.addEventListener('click', onCreateCancel);
+    elements.btnFolderChoiceClose.addEventListener('click', onClose);
   });
 }
 

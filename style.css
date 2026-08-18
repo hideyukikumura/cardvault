@@ -1035,6 +1035,29 @@ body {
   line-height: 1.4;
 }
 
+.folder-choice-card {
+  position: relative;
+  width: min(90vw, 380px);
+}
+
+.folder-choice-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 4px;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.folder-choice-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .folder-info {
   display: flex;
   align-items: center;

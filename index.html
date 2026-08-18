@@ -615,6 +615,37 @@
       </div>
     </div>
 
+    <!-- 保存先フォルダの選択方法（既存のフォルダから選ぶ／新しいフォルダを作成）を選ぶオーバーレイ -->
+    <div id="folder-choice-overlay" class="loading-overlay hidden">
+      <div class="settings-section glass-card folder-choice-card">
+        <button type="button" id="btn-folder-choice-close" class="folder-choice-close" aria-label="閉じる">
+          <i data-lucide="x"></i>
+        </button>
+        <h3 data-i18n="folderChoiceTitle">保存先フォルダの選択</h3>
+
+        <div id="folder-choice-buttons" class="folder-choice-buttons">
+          <button type="button" id="btn-folder-choice-existing" class="btn btn-primary btn-block">
+            <span data-i18n="folderChoiceExisting">既存のフォルダから選ぶ</span>
+          </button>
+          <button type="button" id="btn-folder-choice-new" class="btn btn-secondary btn-block">
+            <span data-i18n="folderChoiceNew">新しいフォルダを作成</span>
+          </button>
+        </div>
+
+        <div id="folder-choice-new-form" class="folder-choice-buttons hidden">
+          <div class="form-group">
+            <input type="text" id="input-new-folder-name" placeholder="フォルダ名" data-i18n-placeholder="placeholderNewFolderName">
+          </div>
+          <button type="button" id="btn-folder-create-confirm" class="btn btn-primary btn-block">
+            <span data-i18n="btnCreateFolder">作成</span>
+          </button>
+          <button type="button" id="btn-folder-create-cancel" class="btn btn-secondary btn-block">
+            <span data-i18n="btnCancel">キャンセル</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- トースト通知 -->
     <div id="toast" class="toast hidden">
       <span id="toast-message">メッセージ</span>
