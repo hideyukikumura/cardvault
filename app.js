@@ -1265,7 +1265,11 @@ function openFolderPicker() {
 
     // 新規フォルダの作成先を、Google Picker経由でマイドライブ内の任意のフォルダに変更する
     const onChangeParent = async () => {
+      // Google Picker自体はdocument.body直下に表示されるが、このオーバーレイを
+      // 表示したままだと手前を覆ってPickerを操作できなくなるため、開いている間だけ隠す
+      elements.folderChoiceOverlay.classList.add('hidden');
       const picked = await openGoogleDrivePicker();
+      elements.folderChoiceOverlay.classList.remove('hidden');
       if (picked) {
         newFolderParent = picked;
         elements.newFolderParentName.textContent = picked.name;
