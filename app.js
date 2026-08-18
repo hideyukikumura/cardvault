@@ -191,6 +191,8 @@ const I18N = {
     photoPlaceholder: '名刺を撮影または画像を選択',
     btnCapture: '写真を撮る',
     btnGallery: 'アルバムから選択',
+    cropTitle: '写真のトリミング',
+    cropHint: '四隅をドラッグして範囲を調整し、内側をドラッグして移動できます',
     labelName: '氏名 / 会社名',
     placeholderName: '例：山田 太郎 / 株式会社サンプル',
     labelAlphabet: '検索用アルファベット (半角英数)',
@@ -481,6 +483,8 @@ const I18N = {
     photoPlaceholder: 'Take or choose a photo of the card',
     btnCapture: 'Take Photo',
     btnGallery: 'Choose from Album',
+    cropTitle: 'Crop Photo',
+    cropHint: 'Drag the corners to adjust the area, or drag inside to move it',
     labelName: 'Name / Company',
     placeholderName: 'e.g. Taro Yamada / Sample Inc.',
     labelAlphabet: 'Alphabet for search (letters/numbers only)',
@@ -782,6 +786,12 @@ const elements = {
   btnSubmitCard: document.getElementById('btn-submit-card'),
   btnSubmitText: document.getElementById('btn-submit-text'),
   addScreenTitle: document.getElementById('add-screen-title'),
+  // Crop Screen（撮影・選択した写真のトリミング）
+  cropImageWrapper: document.getElementById('crop-image-wrapper'),
+  cropImage: document.getElementById('crop-image'),
+  cropRect: document.getElementById('crop-rect'),
+  btnCropCancel: document.getElementById('btn-crop-cancel'),
+  btnCropConfirm: document.getElementById('btn-crop-confirm'),
   // Settings Screen
   btnCloseSettings: document.getElementById('btn-close-settings'),
   userName: document.getElementById('user-name'),
@@ -2323,6 +2333,23 @@ function registerEventListeners() {
   // ファイル選択完了イベント
   elements.inputFile.addEventListener('change', handleFileSelect);
 
+  // トリミング画面：キャンセル・確定
+  elements.btnCropCancel.addEventListener('click', () => {
+    showScreen('screen-add');
+  });
+  elements.btnCropConfirm.addEventListener('click', confirmCrop);
+
+  // トリミング画面：クロップ範囲のドラッグ操作（四隅のハンドル or 範囲内部の移動）
+  elements.cropRect.addEventListener('pointerdown', (e) => {
+    const handleEl = e.target.closest('.crop-handle');
+    const handle = handleEl ? handleEl.dataset.handle : 'move';
+    e.target.setPointerCapture(e.pointerId);
+    startCropDrag(handle, e);
+  });
+  elements.cropRect.addEventListener('pointermove', updateCropDrag);
+  elements.cropRect.addEventListener('pointerup', endCropDrag);
+  elements.cropRect.addEventListener('pointercancel', endCropDrag);
+
   // 新規登録：タグの追加
   elements.btnAddTag.addEventListener('click', addTagFromInput);
   elements.inputTag.addEventListener('keypress', (e) => {
@@ -2537,19 +2564,162 @@ function resetAddForm() {
 
   elements.addScreenTitle.textContent = t('addTitleNew');
   elements.btnSubmitText.textContent = t('submitNew');
+
+  if (pendingPhotoObjectUrl) {
+    URL.revokeObjectURL(pendingPhotoObjectUrl);
+    pendingPhotoObjectUrl = null;
+  }
+  pendingPhotoBlob = null;
+  elements.inputFile.value = '';
 }
 
+// 撮影・選択した写真を直接プレビューに反映せず、まずトリミング画面を経由させる
 function handleFileSelect(e) {
   const file = e.target.files[0];
+  e.target.value = ''; // 同じファイルを連続選択してもchangeイベントが発火するようにする
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (event) => {
-    elements.photoPreview.src = event.target.result;
-    elements.photoPreview.classList.remove('hidden');
-    elements.photoPlaceholder.classList.add('hidden');
+    openCropScreen(event.target.result);
   };
   reader.readAsDataURL(file);
+}
+
+// -------------------------------------------------------------
+// PHOTO CROP SCREEN（撮影・選択した写真の自由なトリミング）
+// -------------------------------------------------------------
+// クロップ確定後の画像データ（Google Driveへのアップロードに使用）と、プレビュー表示用のobject URL
+let pendingPhotoBlob = null;
+let pendingPhotoObjectUrl = null;
+
+const CROP_MIN_SIZE = 40; // クロップ範囲の最小サイズ（表示px基準）
+const CROP_MAX_OUTPUT_DIM = 1600; // 出力画像の長辺の上限px
+
+let cropDrag = null; // ドラッグ中の状態（handle種別 or 'move'、開始座標・矩形など）
+
+function openCropScreen(imageDataUrl) {
+  elements.cropImage.onload = () => {
+    const w = elements.cropImage.clientWidth;
+    const h = elements.cropImage.clientHeight;
+    // 初期のクロップ範囲は画像全体に対して90%、中央寄せ
+    const rect = {
+      left: w * 0.05,
+      top: h * 0.05,
+      width: w * 0.9,
+      height: h * 0.9
+    };
+    applyCropRect(rect);
+  };
+  elements.cropImage.src = imageDataUrl;
+  showScreen('screen-crop');
+}
+
+function applyCropRect(rect) {
+  elements.cropRect.style.left = `${rect.left}px`;
+  elements.cropRect.style.top = `${rect.top}px`;
+  elements.cropRect.style.width = `${rect.width}px`;
+  elements.cropRect.style.height = `${rect.height}px`;
+}
+
+function getCropRect() {
+  return {
+    left: parseFloat(elements.cropRect.style.left) || 0,
+    top: parseFloat(elements.cropRect.style.top) || 0,
+    width: parseFloat(elements.cropRect.style.width) || 0,
+    height: parseFloat(elements.cropRect.style.height) || 0
+  };
+}
+
+function startCropDrag(handle, pointerEvent) {
+  const wrapperW = elements.cropImage.clientWidth;
+  const wrapperH = elements.cropImage.clientHeight;
+  cropDrag = {
+    handle,
+    startX: pointerEvent.clientX,
+    startY: pointerEvent.clientY,
+    startRect: getCropRect(),
+    wrapperW,
+    wrapperH
+  };
+}
+
+function updateCropDrag(pointerEvent) {
+  if (!cropDrag) return;
+  const dx = pointerEvent.clientX - cropDrag.startX;
+  const dy = pointerEvent.clientY - cropDrag.startY;
+  const { startRect, wrapperW, wrapperH, handle } = cropDrag;
+  let { left, top, width, height } = startRect;
+
+  if (handle === 'move') {
+    left = clamp(startRect.left + dx, 0, wrapperW - startRect.width);
+    top = clamp(startRect.top + dy, 0, wrapperH - startRect.height);
+  } else {
+    if (handle.includes('w')) {
+      left = clamp(startRect.left + dx, 0, startRect.left + startRect.width - CROP_MIN_SIZE);
+      width = startRect.left + startRect.width - left;
+    }
+    if (handle.includes('e')) {
+      width = clamp(startRect.width + dx, CROP_MIN_SIZE, wrapperW - startRect.left);
+    }
+    if (handle.includes('n')) {
+      top = clamp(startRect.top + dy, 0, startRect.top + startRect.height - CROP_MIN_SIZE);
+      height = startRect.top + startRect.height - top;
+    }
+    if (handle.includes('s')) {
+      height = clamp(startRect.height + dy, CROP_MIN_SIZE, wrapperH - startRect.top);
+    }
+  }
+
+  applyCropRect({ left, top, width, height });
+}
+
+function endCropDrag() {
+  cropDrag = null;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+// クロップ範囲を確定し、実画像の解像度で切り抜いたJPEG画像をプレビューに反映する
+function confirmCrop() {
+  const rect = getCropRect();
+  const renderedW = elements.cropImage.clientWidth;
+  const renderedH = elements.cropImage.clientHeight;
+  const scaleX = elements.cropImage.naturalWidth / renderedW;
+  const scaleY = elements.cropImage.naturalHeight / renderedH;
+
+  const sx = rect.left * scaleX;
+  const sy = rect.top * scaleY;
+  const sw = rect.width * scaleX;
+  const sh = rect.height * scaleY;
+
+  const outputScale = Math.min(1, CROP_MAX_OUTPUT_DIM / Math.max(sw, sh));
+  const outW = Math.max(1, Math.round(sw * outputScale));
+  const outH = Math.max(1, Math.round(sh * outputScale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(elements.cropImage, sx, sy, sw, sh, 0, 0, outW, outH);
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+
+    if (pendingPhotoObjectUrl) {
+      URL.revokeObjectURL(pendingPhotoObjectUrl);
+    }
+    pendingPhotoBlob = blob;
+    pendingPhotoObjectUrl = URL.createObjectURL(blob);
+
+    elements.photoPreview.src = pendingPhotoObjectUrl;
+    elements.photoPreview.classList.remove('hidden');
+    elements.photoPlaceholder.classList.add('hidden');
+
+    showScreen('screen-add');
+  }, 'image/jpeg', 0.9);
 }
 
 function addTagFromInput() {
@@ -2624,7 +2794,7 @@ async function handleAddCardSubmit(e) {
   e.preventDefault();
 
   const isEditing = !!STATE.editingCardId;
-  const file = elements.inputFile.files[0];
+  const file = pendingPhotoBlob;
 
   // 新規登録時のみ画像は必須（編集時は既存画像を維持できる）
   if (!isEditing && !file && !elements.photoPreview.src) {
@@ -2675,18 +2845,12 @@ async function handleAddCardSubmit(e) {
 
       showToast(t('toastUpdated'));
     } else {
-      let fileBlob = file;
-      // ファイル選択でなくプレビューがある（例えば一部ブラウザで引き継がれた場合などの念のため）
-      if (!fileBlob && elements.photoPreview.src.startsWith('data:')) {
-        fileBlob = dataURLtoBlob(elements.photoPreview.src);
-      }
-
-      if (!fileBlob) {
+      if (!file) {
         throw new Error('No valid image file');
       }
 
       const cardId = 'card_' + Date.now();
-      const driveImageId = await uploadImageToDrive(fileBlob, `${cardId}.jpg`);
+      const driveImageId = await uploadImageToDrive(file, `${cardId}.jpg`);
 
       const newCard = {
         id: cardId,
@@ -4747,15 +4911,6 @@ function escapeHTML(str) {
       '"': '&quot;'
     }[tag] || tag)
   );
-}
-
-function dataURLtoBlob(dataurl) {
-  var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-      bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-  while(n--){
-      u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], {type:mime});
 }
 
 // Service Worker の登録

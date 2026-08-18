@@ -238,6 +238,34 @@
       </div>
     </section>
 
+    <!-- 3.5. PHOTO CROP SCREEN (撮影・選択した写真のトリミング) -->
+    <section id="screen-crop" class="screen">
+      <div class="screen-content glass-fullscreen">
+        <header class="sub-header">
+          <button type="button" id="btn-crop-cancel" class="btn-back">
+            <i data-lucide="x"></i>
+          </button>
+          <h2 data-i18n="cropTitle">写真のトリミング</h2>
+          <button type="button" id="btn-crop-confirm" class="btn-icon">
+            <i data-lucide="check"></i>
+          </button>
+        </header>
+
+        <div class="crop-body">
+          <div id="crop-image-wrapper" class="crop-image-wrapper">
+            <img id="crop-image" src="" alt="" draggable="false">
+            <div id="crop-rect" class="crop-rect">
+              <div class="crop-handle crop-handle-nw" data-handle="nw"></div>
+              <div class="crop-handle crop-handle-ne" data-handle="ne"></div>
+              <div class="crop-handle crop-handle-sw" data-handle="sw"></div>
+              <div class="crop-handle crop-handle-se" data-handle="se"></div>
+            </div>
+          </div>
+          <p class="crop-hint" data-i18n="cropHint">四隅をドラッグして範囲を調整し、内側をドラッグして移動できます</p>
+        </div>
+      </div>
+    </section>
+
     <!-- 4. SETTINGS SCREEN (設定モーダル/画面) -->
     <section id="screen-settings" class="screen">
       <div class="screen-content glass-fullscreen">
