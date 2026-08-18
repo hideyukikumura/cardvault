@@ -1058,6 +1058,12 @@ body {
   gap: 10px;
 }
 
+/* 「既存のフォルダから選ぶ」「新しいフォルダを作成」の2ボタンのみ、縦サイズを約1.5倍にする
+   （フォントサイズはbtnの指定を継承したまま変えず、上下paddingだけで高さを稼ぐ） */
+#folder-choice-buttons .btn {
+  padding: 5px 0;
+}
+
 .folder-info {
   display: flex;
   align-items: center;
