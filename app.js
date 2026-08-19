@@ -1211,7 +1211,8 @@ const ADMOB_BANNER_AD_UNIT_ID = 'ca-app-pub-8261719378187197/7260264649';
 
 // 開発中の実機テストで、本番の広告ユニットIDのまま誤クリック等によるポリシー違反を起こさないよう、
 // この端末をテストデバイスとして登録する（登録するとテスト用ラベル付きの広告が表示される）
-const ADMOB_TEST_DEVICE_IDS = [];
+// TODO: 本番リリース前にこの端末IDは削除すること（テスト端末登録は開発中のみ有効にする）
+const ADMOB_TEST_DEVICE_IDS = ['E01FB3087CB81675AF4D3B3B65A794FF'];
 
 // バナー広告を表示する画面（合戦・デュエル・ダービー、それぞれのランキング表示含む）
 const AD_ENABLED_SCREENS = new Set(['screen-kassen', 'screen-duel', 'screen-derby']);
