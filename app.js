@@ -1207,9 +1207,11 @@ if (IS_NATIVE_APP) {
 // -------------------------------------------------------------
 // ADMOB BANNER ADS（ネイティブアプリのみ。対戦系モード画面でのみ表示）
 // -------------------------------------------------------------
-// TODO: 本番リリース前に、Google公式のテスト用ID（開発中は常にこれを使う）から
-// 実際にAdMobで発行したアプリ／広告ユニットのIDへ差し替えること
-const ADMOB_BANNER_AD_UNIT_ID = 'ca-app-pub-3940256099942544/6300978111';
+const ADMOB_BANNER_AD_UNIT_ID = 'ca-app-pub-8261719378187197/7260264649';
+
+// 開発中の実機テストで、本番の広告ユニットIDのまま誤クリック等によるポリシー違反を起こさないよう、
+// この端末をテストデバイスとして登録する（登録するとテスト用ラベル付きの広告が表示される）
+const ADMOB_TEST_DEVICE_IDS = [];
 
 // バナー広告を表示する画面（合戦・デュエル・ダービー、それぞれのランキング表示含む）
 const AD_ENABLED_SCREENS = new Set(['screen-kassen', 'screen-duel', 'screen-derby']);
@@ -1221,7 +1223,7 @@ async function ensureAdMobInitialized() {
   if (admobInitialized) return;
   admobInitialized = true;
   try {
-    await window.Capacitor.Plugins.AdMob.initialize();
+    await window.Capacitor.Plugins.AdMob.initialize({ testingDevices: ADMOB_TEST_DEVICE_IDS });
   } catch (error) {
     console.error('AdMob initialize error:', error);
   }
