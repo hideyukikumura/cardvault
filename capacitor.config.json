@@ -1,0 +1,9 @@
+{
+  "appId": "com.hideyukikumura.cardvalia",
+  "appName": "Cardvalia",
+  "webDir": "www",
+  "server": {
+    "url": "https://hideyukikumura.github.io/cardvault/",
+    "androidScheme": "https"
+  }
+}

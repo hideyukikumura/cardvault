@@ -939,7 +939,11 @@ function initApp() {
   // イベントリスナーの登録
   registerEventListeners();
 
-  initGoogleAuth();
+  // ネイティブアプリ上ではGIS（Google Identity Services）の埋め込みスクリプト自体が
+  // Googleにブロックされ必ず失敗するため、初期化を試みない（handleLoginでCustom Tabsに分岐する）
+  if (!IS_NATIVE_APP) {
+    initGoogleAuth();
+  }
 
   // 実際の購入状況（Google Play Billing）をバックグラウンドで確認
   if (IAP_ENABLED) checkProEntitlement();
@@ -1079,8 +1083,87 @@ function initGoogleAuth(retryCount = 0) {
   }
 }
 
+// Capacitorネイティブアプリ（Android実機アプリ）上では、Googleが埋め込みWebView内での
+// Googleサインインをブロックするため、GIS（Google Identity Services）の埋め込みフローが使えない。
+// そのためネイティブアプリ上でのみ、Custom Tabs（実機のChrome）を別途開いてサインインしてもらい、
+// oauth-callback.html経由でアプリ独自のURLスキームに戻してトークンを受け取る方式にする。
+// Web版・TWA版（実Chromeで開いている場合）は従来通りGISの埋め込みフローのままで問題ない
+const IS_NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const NATIVE_OAUTH_CALLBACK_URL = 'https://hideyukikumura.github.io/cardvault/oauth-callback.html';
+const NATIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+
+// Custom Tabsでの認証中に、appUrlOpen（成功時）とbrowserFinished（キャンセル時含む）が
+// どちらも発火しうるため、成功処理が終わっているかをこのフラグで管理し二重処理を防ぐ
+let nativeOAuthCallbackHandled = false;
+
+function handleNativeLogin() {
+  nativeOAuthCallbackHandled = false;
+  const params = new URLSearchParams({
+    client_id: STATE.clientId,
+    redirect_uri: NATIVE_OAUTH_CALLBACK_URL,
+    response_type: 'token',
+    scope: NATIVE_OAUTH_SCOPE,
+    prompt: 'consent',
+    include_granted_scopes: 'true'
+  });
+  window.Capacitor.Plugins.Browser.open({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
+}
+
+// oauth-callback.htmlがカスタムURLスキーム（com.hideyukikumura.cardvalia://oauth-callback#...）で
+// アプリに制御を戻してきた際の受け取り処理。GISの成功コールバックと同じ後続処理を行う
+function handleNativeOAuthCallback(url) {
+  nativeOAuthCallbackHandled = true;
+  window.Capacitor.Plugins.Browser.close().catch(() => {});
+
+  const hashIndex = url.indexOf('#');
+  const params = new URLSearchParams(hashIndex >= 0 ? url.slice(hashIndex + 1) : '');
+
+  if (params.get('error')) {
+    hideLoading();
+    showToast(t('toastAuthError', { error: params.get('error') }));
+    return;
+  }
+
+  const accessToken = params.get('access_token');
+  const expiresIn = parseInt(params.get('expires_in') || '0', 10);
+  if (!accessToken) {
+    hideLoading();
+    showToast(t('toastGoogleLibError'));
+    return;
+  }
+
+  STATE.accessToken = accessToken;
+  STATE.tokenExpiry = Date.now() + expiresIn * 1000;
+  localStorage.setItem('accessToken', STATE.accessToken);
+  localStorage.setItem('tokenExpiry', STATE.tokenExpiry.toString());
+
+  showToast(t('toastAuthSuccess'));
+  fetchUserProfile();
+  showScreen('screen-main');
+  syncWithDrive();
+}
+
+if (IS_NATIVE_APP) {
+  window.Capacitor.Plugins.App.addListener('appUrlOpen', (data) => {
+    if (data && data.url && data.url.startsWith('com.hideyukikumura.cardvalia://oauth-callback')) {
+      handleNativeOAuthCallback(data.url);
+    }
+  });
+  // ユーザーがCustom Tabsを手動で閉じた（サインインをキャンセルした）場合、
+  // appUrlOpenは発火しないため、ここでローディング表示を消す
+  window.Capacitor.Plugins.Browser.addListener('browserFinished', () => {
+    if (!nativeOAuthCallbackHandled) hideLoading();
+  });
+}
+
 function handleLogin() {
   showLoading(t('loadingSigningIn'));
+
+  if (IS_NATIVE_APP) {
+    handleNativeLogin();
+    return;
+  }
+
   if (!STATE.tokenClient) {
     initGoogleAuth();
   }
