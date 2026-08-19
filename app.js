@@ -33,6 +33,7 @@ let STATE = {
   })(),
   kassenView: 'map',  // 合戦モード画面内の表示切り替え（'map' or 'ranking'。ランキングは未実装のプレースホルダー）
   islandDetected: false, // マップ上に孤島（どのヘックスにも接していない配備）が一度でも発生したか（Google Driveに保存）
+  duelUltimateMoveTriggered: false, // デュエルで押し合いが9回続き、超奥義が発動したことが一度でもあるか（Google Driveに保存）
   // 一度でも達成したミッションのID一覧（Google Driveに保存）。
   // 合戦データのリセット等で元になる数値が0に戻っても、ここに記録済みのミッションは達成済みのまま保持する
   missionsAchieved: new Set(),
@@ -148,6 +149,7 @@ const I18N = {
     missionMaxPointsTag: 'タグモードで{count}pt達成の名刺が出現',
     missionMaxPointsInitial: 'イニシャルモードで{count}pt達成の名刺が出現',
     missionMaxPointsDuel: 'デュエルで{count}pt達成の名刺が出現',
+    missionDuelUltimateMove: '超奥義が発動',
     missionMaxPointsDerby: 'ダービーで{count}pt達成の名刺が出現',
     missionHexCount100: 'マップのヘックス総数100個達成',
     missionIslandDetected: 'マップに孤島が発生',
@@ -236,6 +238,12 @@ const I18N = {
     btnCancel: 'キャンセル',
     toastFolderNameRequired: 'フォルダ名を入力してください',
     toastFolderCreateError: 'フォルダの作成に失敗しました',
+    headingTagManagement: 'タグの削除',
+    tagManagementDesc: '登録済みのタグを削除できます。削除すると、そのタグを持つすべての名刺からタグが外れます。',
+    tagManagementEmpty: '削除できるタグがありません',
+    confirmDeleteTag: '「{tag}」を削除します。タグを削除するとタグ合戦モードの地形が変わる可能性があります。この操作は戻せません。よろしいですか？',
+    toastTagDeleted: '「{tag}」を削除しました',
+    toastTagDeleteError: 'タグの削除に失敗しました',
     headingKassenData: '合戦データ',
     btnResetKassenHistory: '合戦履歴をリセット',
     confirmResetKassenHistory: 'すべての合戦履歴をリセットします。よろしいですか？',
@@ -352,6 +360,20 @@ const I18N = {
       '✨ {name}の渾身の一手、場を揺るがす！',
       '✨ {name}、伝説の一手を繰り出した！'
     ],
+    // 押し合いが9回続いても決着がつかない場合、10回目の代わりに発動する演出
+    duelFinalPhase: '最終局面！どっちが勝つか！？',
+    duelUltimateTemplates: [
+      '🌟 {name}の超奥義「満点の笑顔」が炸裂！',
+      '🌟 {name}、渾身の超奥義「万雷の拍手」で場を制した！',
+      '🌟 {name}の超奥義「一瞬の静寂」が全てを変えた！',
+      '🌟 {name}、超奥義「虹色のため息」を解き放つ！',
+      '🌟 {name}の超奥義「星空の祝福」が舞い降りた！',
+      '🌟 {name}、超奥義「万感のお辞儀」で場内を魅了！',
+      '🌟 {name}の超奥義「奇跡のひとこと」が決まった！',
+      '🌟 {name}、超奥義「光の握手」で決着をつけた！',
+      '🌟 {name}の超奥義「伝説のウインク」が炸裂！',
+      '🌟 {name}、超奥義「永遠の拍手喝采」で勝利をつかんだ！'
+    ],
 
     loadingDefault: '読み込み中...',
     loadingSigningIn: 'Googleでサインイン中...',
@@ -447,6 +469,7 @@ const I18N = {
     missionMaxPointsTag: 'A card reaches {count}pt in Tag Mode',
     missionMaxPointsInitial: 'A card reaches {count}pt in Initial Mode',
     missionMaxPointsDuel: 'A card reaches {count}pt in Duel Mode',
+    missionDuelUltimateMove: 'The Ultimate Move is unleashed',
     missionMaxPointsDerby: 'A card reaches {count}pt in Derby Mode',
     missionHexCount100: 'Reach 100 hexes on the map',
     missionIslandDetected: 'An island appeared on the map',
@@ -535,6 +558,12 @@ const I18N = {
     btnCancel: 'Cancel',
     toastFolderNameRequired: 'Please enter a folder name',
     toastFolderCreateError: 'Failed to create the folder',
+    headingTagManagement: 'Delete Tags',
+    tagManagementDesc: 'Delete tags you no longer need. Deleting a tag removes it from every card that has it.',
+    tagManagementEmpty: 'No tags available to delete',
+    confirmDeleteTag: 'Delete "{tag}"? This may change the terrain in Tag Showdown mode. This cannot be undone. Are you sure?',
+    toastTagDeleted: 'Deleted "{tag}"',
+    toastTagDeleteError: 'Failed to delete the tag',
     headingKassenData: 'Showdown Data',
     btnResetKassenHistory: 'Reset Showdown History',
     confirmResetKassenHistory: 'This will reset all Showdown history. Continue?',
@@ -650,6 +679,20 @@ const I18N = {
       '✨ {name} bends fate to their will...!',
       "✨ {name}'s all-out strike shakes the arena!",
       '✨ {name} pulls off a legendary move!'
+    ],
+    // Plays when 9 exchanges pass without a winner, replacing what would be the 10th push
+    duelFinalPhase: 'Final showdown! Who will come out on top!?',
+    duelUltimateTemplates: [
+      '🌟 {name} unleashes the ultimate move: Perfect Smile!',
+      '🌟 {name} commands the arena with the ultimate move: Thunderous Applause!',
+      "🌟 {name}'s ultimate move, Moment of Silence, changes everything!",
+      '🌟 {name} releases the ultimate move: Rainbow Sigh!',
+      "🌟 {name}'s ultimate move, Starlit Blessing, descends upon the arena!",
+      '🌟 {name} captivates everyone with the ultimate move: Heartfelt Bow!',
+      "🌟 {name}'s ultimate move, Miracle Word, seals the outcome!",
+      '🌟 {name} settles it with the ultimate move: Handshake of Light!',
+      '🌟 {name} unleashes the legendary ultimate move: Wink!',
+      '🌟 {name} claims victory with the ultimate move: Eternal Standing Ovation!'
     ],
 
     loadingDefault: 'Loading...',
@@ -825,6 +868,12 @@ const elements = {
   inputNewFolderName: document.getElementById('input-new-folder-name'),
   btnFolderCreateConfirm: document.getElementById('btn-folder-create-confirm'),
   btnFolderCreateCancel: document.getElementById('btn-folder-create-cancel'),
+  tagManagementList: document.getElementById('tag-management-list'),
+  tagManagementEmpty: document.getElementById('tag-management-empty'),
+  tagDeleteConfirm: document.getElementById('tag-delete-confirm'),
+  tagDeleteConfirmText: document.getElementById('tag-delete-confirm-text'),
+  btnTagDeleteYes: document.getElementById('btn-tag-delete-yes'),
+  btnTagDeleteNo: document.getElementById('btn-tag-delete-no'),
   langSwitch: document.getElementById('lang-switch'),
   btnResetKassenHistory: document.getElementById('btn-reset-kassen-history'),
   kassenResetConfirm: document.getElementById('kassen-reset-confirm'),
@@ -1518,6 +1567,72 @@ function updateFolderNameDisplay() {
   }
 }
 
+// -------------------------------------------------------------
+// TAG MANAGEMENT（設定画面：登録済みタグの削除）
+// -------------------------------------------------------------
+// 削除確認ダイアログで「はい」を押した際にどのタグを消すかを覚えておく
+let pendingTagToDelete = null;
+
+function renderTagManagementList() {
+  const allTagsSet = new Set();
+  STATE.cards.forEach(card => {
+    if (card.tags) card.tags.forEach(tag => allTagsSet.add(tag));
+  });
+  const tags = [...allTagsSet].sort((a, b) => a.localeCompare(b, 'ja'));
+
+  elements.tagManagementList.innerHTML = '';
+  elements.tagManagementEmpty.classList.toggle('hidden', tags.length > 0);
+
+  tags.forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-management-chip';
+    chip.innerHTML = `
+      <span>${escapeHTML(tag)}</span>
+      <button type="button" class="btn-tag-delete" data-tag="${escapeHTML(tag)}" aria-label="${t('headingTagManagement')}">
+        <i data-lucide="trash-2"></i>
+      </button>
+    `;
+    elements.tagManagementList.appendChild(chip);
+  });
+
+  lucide.createIcons();
+}
+
+function requestDeleteTag(tag) {
+  pendingTagToDelete = tag;
+  elements.tagDeleteConfirmText.textContent = t('confirmDeleteTag', { tag });
+  elements.tagDeleteConfirm.classList.remove('hidden');
+}
+
+// 指定タグを、それを持つ全名刺データから取り除く。ランキング・ミッション達成状況等は一切変更しない
+async function deleteTag(tag) {
+  showLoading(t('loadingSyncing'));
+  try {
+    STATE.cards.forEach(card => {
+      if (!card.tags || !card.tags.includes(tag)) return;
+      card.tags = card.tags.filter(t2 => t2 !== tag);
+      // タグ合戦モードの陣地割り当ても、削除したタグの分は不要になるため一緒に片付ける
+      if (card.kassenPos && card.kassenPos.tag) {
+        delete card.kassenPos.tag[tag];
+      }
+    });
+
+    const saveSuccess = await saveMetadata();
+    if (!saveSuccess) {
+      throw new Error('Failed to update metadata.json');
+    }
+
+    renderTagManagementList();
+    renderApp();
+    showToast(t('toastTagDeleted', { tag }));
+  } catch (error) {
+    console.error('Tag Delete Error:', error);
+    showToast(t('toastTagDeleteError'));
+  } finally {
+    hideLoading();
+  }
+}
+
 // ドライブの保存先フォルダとメタデータの同期
 async function syncWithDrive() {
   showLoading(t('loadingSyncing'));
@@ -1578,7 +1693,7 @@ async function getOrCreateMetadataFileId() {
 
   const boundary = 'foo_bar_baz';
   const metadataPart = JSON.stringify(fileMetadata);
-  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false, duelBattleCount: 0, derbyBattleCount: 0 }); // 空の名刺リスト
+  const mediaPart = JSON.stringify({ cards: [], kassenBattleCount: { tag: 0, initial: 0 }, islandDetected: false, missionsAchieved: [], lastLaunchDate: null, launchStreak: 0, returnAfterGapDetected: false, usedAlphabetSort: false, usedNewestSortAfterAlphabet: false, duelBattleCount: 0, derbyBattleCount: 0, duelUltimateMoveTriggered: false }); // 空の名刺リスト
 
   const multipartBody = 
     `\r\n--${boundary}\r\n` +
@@ -1619,6 +1734,7 @@ async function loadMetadata() {
       STATE.usedNewestSortAfterAlphabet = false;
       STATE.duelBattleCount = 0;
       STATE.derbyBattleCount = 0;
+      STATE.duelUltimateMoveTriggered = false;
     } else {
       STATE.cards = data.cards || [];
       STATE.kassenBattleCount = normalizeKassenBattleCount(data.kassenBattleCount);
@@ -1631,6 +1747,7 @@ async function loadMetadata() {
       STATE.usedNewestSortAfterAlphabet = !!data.usedNewestSortAfterAlphabet;
       STATE.duelBattleCount = data.duelBattleCount || 0;
       STATE.derbyBattleCount = data.derbyBattleCount || 0;
+      STATE.duelUltimateMoveTriggered = !!data.duelUltimateMoveTriggered;
     }
   } else {
     throw new Error('Failed to load metadata');
@@ -1670,6 +1787,7 @@ async function saveMetadata() {
       usedNewestSortAfterAlphabet: STATE.usedNewestSortAfterAlphabet,
       duelBattleCount: STATE.duelBattleCount,
       derbyBattleCount: STATE.derbyBattleCount,
+      duelUltimateMoveTriggered: STATE.duelUltimateMoveTriggered,
     })
   });
   return res.ok;
@@ -2480,6 +2598,7 @@ function registerEventListeners() {
   elements.btnSettings.addEventListener('click', () => {
     updateFolderNameDisplay();
     updateUpgradeSectionDisplay();
+    renderTagManagementList();
     showScreen('screen-settings');
   });
   elements.btnAddCard.addEventListener('click', openAddCardScreen);
@@ -2654,6 +2773,24 @@ function registerEventListeners() {
       console.error('Folder Change Error:', error);
       hideLoading();
       showToast(t('toastSyncError'));
+    }
+  });
+
+  // 設定画面：タグの削除（確認ダイアログ）
+  elements.tagManagementList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-tag-delete');
+    if (!btn) return;
+    requestDeleteTag(btn.dataset.tag);
+  });
+  elements.btnTagDeleteNo.addEventListener('click', () => {
+    pendingTagToDelete = null;
+    elements.tagDeleteConfirm.classList.add('hidden');
+  });
+  elements.btnTagDeleteYes.addEventListener('click', () => {
+    elements.tagDeleteConfirm.classList.add('hidden');
+    if (pendingTagToDelete) {
+      deleteTag(pendingTagToDelete);
+      pendingTagToDelete = null;
     }
   });
 
@@ -3298,6 +3435,14 @@ const MISSION_BASE_CATEGORIES = [
     thresholds: [10, 20],
     getCount: () => STATE.cards.reduce((max, card) => Math.max(max, getCardDuelPoints(card)), 0),
     getThresholdLabel: threshold => t('missionMaxPointsDuel', { count: threshold }),
+    lockedStatusKey: 'missionLockedDuel',
+  },
+  {
+    // 押し合いが9回続いて決着がつかず、超奥義が発動したことが一度でもあるか
+    key: 'duelUltimateMove',
+    thresholds: [1],
+    getCount: () => (STATE.duelUltimateMoveTriggered ? 1 : 0),
+    getThresholdLabel: () => t('missionDuelUltimateMove'),
     lockedStatusKey: 'missionLockedDuel',
   },
   {
@@ -4112,16 +4257,12 @@ async function startKassen() {
   const isAnniversaryBattle = !isCentennialBattle && battleNumber % 10 === 0;
   updateKassenBattleCountDisplay();
 
-  // 前回のハイライト・結果をリセット（再戦時にも使えるように）
-  document.querySelectorAll('.kassen-hex').forEach(hex => {
-    hex.classList.remove('kassen-hex-winner', 'kassen-hex-loser');
-  });
-  document.querySelectorAll('.kassen-legend-item').forEach(item => {
-    item.classList.remove('kassen-legend-item-loser');
-  });
+  // 前回の陣取り結果（ヘックスの所属・塗り色）とハイライトを、正しいチーム別の色分けに戻す。
+  // 前回の合戦終了後は全ヘックスが勝利チームの色に塗り終わった状態のままなので、
+  // 単にwinner/loserのCSSクラスを外すだけでは不十分で、地図自体を作り直す必要がある
+  renderKassenMap();
   elements.kassenResult.innerHTML = '';
   elements.kassenResult.classList.add('hidden');
-  hideKassenHexPopup();
 
   const teamMap = buildKassenTeams(STATE.kassenMode);
   const teamKeys = [...teamMap.keys()];
@@ -4526,8 +4667,31 @@ async function startDuel() {
   await duelSleep(700);
 
   // 押し合い（相手に押し返されると相殺される）。どちらかがバーの端まで押し切ったら勝利。
-  // まれに「必殺技」が発動し、一気に2つ押し込む
+  // まれに「必殺技」が発動し、一気に2つ押し込む。
+  // 9回押し合っても決着がつかない場合、デュエルが長引きすぎないよう、
+  // 10回目の代わりに「超奥義」で強制的に決着をつける
+  let pushCount = 0;
   while (Math.abs(STATE.duel.netScore) < 3) {
+    pushCount++;
+
+    if (pushCount > 9) {
+      elements.duelCommentaryText.textContent = t('duelFinalPhase');
+      await duelSleep(1300);
+
+      const direction = Math.random() < 0.5 ? 1 : -1;
+      const actingCard = direction > 0 ? STATE.duel.left : STATE.duel.right;
+      const ultimateTemplates = t('duelUltimateTemplates');
+      const template = ultimateTemplates[Math.floor(Math.random() * ultimateTemplates.length)];
+      elements.duelCommentaryText.textContent = template.replace(/\{name\}/g, actingCard.name);
+
+      STATE.duel.netScore = direction * 3;
+      STATE.duelUltimateMoveTriggered = true;
+      updateMissionsGlow();
+      updateDuelBar();
+      await duelSleep(1300);
+      break;
+    }
+
     const direction = Math.random() < 0.5 ? 1 : -1; // +1 = 左が押す, -1 = 右が押す
     const isSpecialMove = Math.random() < 0.2;
     const magnitude = isSpecialMove ? 2 : 1;

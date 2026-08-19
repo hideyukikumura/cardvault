@@ -328,6 +328,13 @@
           </div>
 
           <div class="settings-section glass-card">
+            <h3 data-i18n="headingTagManagement">タグの削除</h3>
+            <p class="section-desc" data-i18n="tagManagementDesc">登録済みのタグを削除できます。削除すると、そのタグを持つすべての名刺からタグが外れます。</p>
+            <div id="tag-management-list" class="tag-management-list"></div>
+            <p id="tag-management-empty" class="section-desc hidden" data-i18n="tagManagementEmpty">削除できるタグがありません</p>
+          </div>
+
+          <div class="settings-section glass-card">
             <h3 data-i18n="headingKassenData">合戦データ</h3>
             <button id="btn-reset-kassen-history" class="btn btn-danger btn-block">
               <i data-lucide="rotate-ccw"></i>
@@ -355,6 +362,17 @@
                 <span data-i18n="infoStorageValue">Google ドライブ（ご自身で選択したフォルダ）</span>
               </li>
             </ul>
+          </div>
+        </div>
+
+        <!-- タグ削除の確認ダイアログ -->
+        <div id="tag-delete-confirm" class="confirm-overlay hidden">
+          <div class="confirm-box glass">
+            <p id="tag-delete-confirm-text"></p>
+            <div class="confirm-actions">
+              <button id="btn-tag-delete-yes" class="btn btn-danger" data-i18n="btnYes">はい</button>
+              <button id="btn-tag-delete-no" class="btn btn-secondary" data-i18n="btnNo">いいえ</button>
+            </div>
           </div>
         </div>
 
