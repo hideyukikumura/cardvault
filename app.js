@@ -1090,14 +1090,17 @@ function initGoogleAuth(retryCount = 0) {
 // Web版・TWA版（実Chromeで開いている場合）は従来通りGISの埋め込みフローのままで問題ない
 const IS_NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const NATIVE_OAUTH_CALLBACK_URL = 'https://hideyukikumura.github.io/cardvault/oauth-callback.html';
+const NATIVE_FOLDER_PICKER_URL = 'https://hideyukikumura.github.io/cardvault/folder-picker.html';
 const NATIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 
-// Custom Tabsでの認証中に、appUrlOpen（成功時）とbrowserFinished（キャンセル時含む）が
-// どちらも発火しうるため、成功処理が終わっているかをこのフラグで管理し二重処理を防ぐ
-let nativeOAuthCallbackHandled = false;
+// Custom Tabsで開いた認証系フロー（ログイン／既存フォルダ選択）が、まだ結果を受け取れていないかを
+// 共通で管理する。ユーザーがCustom Tabsを手動で閉じた（バックボタン等）場合はappUrlOpenが発火せず
+// browserFinishedのみが呼ばれるため、その際にどちらのフローの後始末をすべきか判定するのに使う
+let pendingNativeFlow = null; // 'login' | 'folderPicker' | null
+let nativeFolderPickerResolve = null;
 
 function handleNativeLogin() {
-  nativeOAuthCallbackHandled = false;
+  pendingNativeFlow = 'login';
   const params = new URLSearchParams({
     client_id: STATE.clientId,
     redirect_uri: NATIVE_OAUTH_CALLBACK_URL,
@@ -1112,7 +1115,7 @@ function handleNativeLogin() {
 // oauth-callback.htmlがカスタムURLスキーム（com.hideyukikumura.cardvalia://oauth-callback#...）で
 // アプリに制御を戻してきた際の受け取り処理。GISの成功コールバックと同じ後続処理を行う
 function handleNativeOAuthCallback(url) {
-  nativeOAuthCallbackHandled = true;
+  pendingNativeFlow = null;
   window.Capacitor.Plugins.Browser.close().catch(() => {});
 
   const hashIndex = url.indexOf('#');
@@ -1143,16 +1146,54 @@ function handleNativeOAuthCallback(url) {
   syncWithDrive();
 }
 
+// Google Picker自体もWebView内からのアクセスをブロックするため、folder-picker.html
+// （Picker本体を読み込む中継ページ）をCustom Tabsで開き、選択結果をURLスキームで受け取る
+function openNativeGoogleDrivePicker() {
+  return new Promise((resolve) => {
+    pendingNativeFlow = 'folderPicker';
+    nativeFolderPickerResolve = resolve;
+    const params = new URLSearchParams({ token: STATE.accessToken, key: GOOGLE_PICKER_API_KEY });
+    window.Capacitor.Plugins.Browser.open({ url: `${NATIVE_FOLDER_PICKER_URL}?${params.toString()}` });
+  });
+}
+
+// folder-picker.htmlがカスタムURLスキーム（...://folder-picker-callback?id=...&name=...）で
+// 戻ってきた際の受け取り処理。idが無ければキャンセル扱い
+function handleNativeFolderPickerCallback(url) {
+  pendingNativeFlow = null;
+  window.Capacitor.Plugins.Browser.close().catch(() => {});
+  if (!nativeFolderPickerResolve) return;
+
+  const queryIndex = url.indexOf('?');
+  const params = new URLSearchParams(queryIndex >= 0 ? url.slice(queryIndex + 1) : '');
+  const id = params.get('id');
+  const name = params.get('name');
+
+  const resolve = nativeFolderPickerResolve;
+  nativeFolderPickerResolve = null;
+  resolve(id ? { id, name: name || '' } : null);
+}
+
 if (IS_NATIVE_APP) {
   window.Capacitor.Plugins.App.addListener('appUrlOpen', (data) => {
-    if (data && data.url && data.url.startsWith('com.hideyukikumura.cardvalia://oauth-callback')) {
+    if (!data || !data.url) return;
+    if (data.url.startsWith('com.hideyukikumura.cardvalia://oauth-callback')) {
       handleNativeOAuthCallback(data.url);
+    } else if (data.url.startsWith('com.hideyukikumura.cardvalia://folder-picker-callback')) {
+      handleNativeFolderPickerCallback(data.url);
     }
   });
-  // ユーザーがCustom Tabsを手動で閉じた（サインインをキャンセルした）場合、
-  // appUrlOpenは発火しないため、ここでローディング表示を消す
+  // ユーザーがCustom Tabsを手動で閉じた場合、appUrlOpenは発火しないため、
+  // ここで各フローに応じた後始末（ローディング解除／Promiseのnull解決）を行う
   window.Capacitor.Plugins.Browser.addListener('browserFinished', () => {
-    if (!nativeOAuthCallbackHandled) hideLoading();
+    if (pendingNativeFlow === 'login') {
+      hideLoading();
+    } else if (pendingNativeFlow === 'folderPicker' && nativeFolderPickerResolve) {
+      const resolve = nativeFolderPickerResolve;
+      nativeFolderPickerResolve = null;
+      resolve(null);
+    }
+    pendingNativeFlow = null;
   });
 }
 
@@ -1259,6 +1300,12 @@ function loadGooglePicker() {
 // 注：Google Picker（埋め込みウィジェット）には新規フォルダ作成ボタンが無いため、
 // 「新しいフォルダを作成」はopenFolderPicker()側でDrive APIを直接呼んで別途対応している
 async function openGoogleDrivePicker() {
+  // ネイティブアプリではGoogle PickerもWebView内での埋め込み利用がブロックされるため、
+  // Custom Tabs経由の別実装（folder-picker.html）に分岐する
+  if (IS_NATIVE_APP) {
+    return openNativeGoogleDrivePicker();
+  }
+
   // Pickerモジュールの読み込みには通信を伴うため、その間だけローディング表示を出す。
   // 表示したままpicker.setVisible(true)まで進むと、全画面オーバーレイがPickerダイアログの
   // クリックを塞いでしまうため、Picker表示直前に必ず隠す
