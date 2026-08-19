@@ -999,6 +999,13 @@ function showScreen(screenId) {
   }
   // Lucideアイコンの再読み込み
   lucide.createIcons();
+
+  // 対戦系モード（合戦・デュエル・ダービー）を開いている間だけバナー広告を表示する
+  if (AD_ENABLED_SCREENS.has(screenId)) {
+    showModeBannerAd();
+  } else {
+    hideModeBannerAd();
+  }
 }
 
 // -------------------------------------------------------------
@@ -1195,6 +1202,55 @@ if (IS_NATIVE_APP) {
     }
     pendingNativeFlow = null;
   });
+}
+
+// -------------------------------------------------------------
+// ADMOB BANNER ADS（ネイティブアプリのみ。対戦系モード画面でのみ表示）
+// -------------------------------------------------------------
+// TODO: 本番リリース前に、Google公式のテスト用ID（開発中は常にこれを使う）から
+// 実際にAdMobで発行したアプリ／広告ユニットのIDへ差し替えること
+const ADMOB_BANNER_AD_UNIT_ID = 'ca-app-pub-3940256099942544/6300978111';
+
+// バナー広告を表示する画面（合戦・デュエル・ダービー、それぞれのランキング表示含む）
+const AD_ENABLED_SCREENS = new Set(['screen-kassen', 'screen-duel', 'screen-derby']);
+
+let admobInitialized = false;
+let modeBannerVisible = false;
+
+async function ensureAdMobInitialized() {
+  if (admobInitialized) return;
+  admobInitialized = true;
+  try {
+    await window.Capacitor.Plugins.AdMob.initialize();
+  } catch (error) {
+    console.error('AdMob initialize error:', error);
+  }
+}
+
+async function showModeBannerAd() {
+  if (!IS_NATIVE_APP || modeBannerVisible) return;
+  modeBannerVisible = true;
+  try {
+    await ensureAdMobInitialized();
+    await window.Capacitor.Plugins.AdMob.showBanner({
+      adId: ADMOB_BANNER_AD_UNIT_ID,
+      adSize: 'ADAPTIVE_BANNER',
+      position: 'BOTTOM_CENTER',
+      margin: 0
+    });
+  } catch (error) {
+    console.error('AdMob showBanner error:', error);
+  }
+}
+
+async function hideModeBannerAd() {
+  if (!IS_NATIVE_APP || !modeBannerVisible) return;
+  modeBannerVisible = false;
+  try {
+    await window.Capacitor.Plugins.AdMob.hideBanner();
+  } catch (error) {
+    console.error('AdMob hideBanner error:', error);
+  }
 }
 
 function handleLogin() {

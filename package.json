@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/hideyukikumura/cardvault#readme",
   "dependencies": {
+    "@capacitor-community/admob": "^8.1.0",
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",

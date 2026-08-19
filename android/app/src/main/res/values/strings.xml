@@ -4,4 +4,6 @@
     <string name="title_activity_main">Cardvalia</string>
     <string name="package_name">com.hideyukikumura.cardvalia</string>
     <string name="custom_url_scheme">com.hideyukikumura.cardvalia</string>
+    <!-- TODO: 本番リリース前に、Google公式のテスト用AdMobアプリIDから実際のIDへ差し替えること -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
 </resources>
