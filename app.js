@@ -254,6 +254,9 @@ const I18N = {
     confirmResetDuelHistory: 'すべてのデュエルデータをリセットします。よろしいですか？',
     toastDuelHistoryReset: 'デュエルデータをリセットしました',
     toastDuelResetError: 'デュエルデータのリセットに失敗しました',
+    headingAdPrivacy: '広告のプライバシー設定',
+    adPrivacyDesc: '広告配信のための同意内容は、いつでも変更できます。',
+    btnAdPrivacyOptions: '同意設定を管理',
     headingAppInfo: 'アプリ情報',
     infoVersion: 'バージョン',
     infoStorage: 'ストレージ',
@@ -574,6 +577,9 @@ const I18N = {
     confirmResetDuelHistory: 'This will reset all Duel data. Continue?',
     toastDuelHistoryReset: 'Duel data has been reset',
     toastDuelResetError: 'Failed to reset Duel data',
+    headingAdPrivacy: 'Ad Privacy Settings',
+    adPrivacyDesc: 'You can change your ad consent choices at any time.',
+    btnAdPrivacyOptions: 'Manage Consent',
     headingAppInfo: 'App Info',
     infoVersion: 'Version',
     infoStorage: 'Storage',
@@ -874,6 +880,8 @@ const elements = {
   tagDeleteConfirmText: document.getElementById('tag-delete-confirm-text'),
   btnTagDeleteYes: document.getElementById('btn-tag-delete-yes'),
   btnTagDeleteNo: document.getElementById('btn-tag-delete-no'),
+  settingsAdPrivacySection: document.getElementById('settings-ad-privacy-section'),
+  btnAdPrivacyOptions: document.getElementById('btn-ad-privacy-options'),
   langSwitch: document.getElementById('lang-switch'),
   btnResetKassenHistory: document.getElementById('btn-reset-kassen-history'),
   kassenResetConfirm: document.getElementById('kassen-reset-confirm'),
@@ -992,6 +1000,10 @@ function initApp() {
   // Googleにブロックされ必ず失敗するため、初期化を試みない（handleLoginでCustom Tabsに分岐する）
   if (!IS_NATIVE_APP) {
     initGoogleAuth();
+  } else {
+    // 広告を表示する画面を開く前に同意状況を確定させておきたいので、起動時に済ませておく
+    // （設定画面の「広告のプライバシー設定」欄の表示要否もここで決まる）
+    ensureAdMobInitialized();
   }
 
   // 実際の購入状況（Google Play Billing）をバックグラウンドで確認
@@ -1268,15 +1280,35 @@ const AD_ENABLED_SCREENS = new Set(['screen-kassen', 'screen-duel', 'screen-derb
 
 let admobInitialized = false;
 let modeBannerVisible = false;
+// 対象地域（EEA/UK等）のユーザーには、いつでも同意内容を見直せる入口を設定画面に出す必要がある
+let adPrivacyOptionsRequired = false;
 
 async function ensureAdMobInitialized() {
   if (admobInitialized) return;
   admobInitialized = true;
   try {
     await window.Capacitor.Plugins.AdMob.initialize({ testingDevices: ADMOB_TEST_DEVICE_IDS });
+
+    // GDPR等の同意確認（UMP）。対象地域のユーザーには、広告表示前に同意フォームを提示する。
+    // debugGeography:1(EEA)はADMOB_TEST_DEVICE_IDSに登録した端末にしか作用しないため、
+    // 実際のユーザーの地域判定には影響しない（このアプリの動作確認用）
+    let consentInfo = await window.Capacitor.Plugins.AdMob.requestConsentInfo({
+      debugGeography: 1,
+      testDeviceIdentifiers: ADMOB_TEST_DEVICE_IDS
+    });
+    if (consentInfo.isConsentFormAvailable && consentInfo.status === 'REQUIRED') {
+      consentInfo = await window.Capacitor.Plugins.AdMob.showConsentForm();
+    }
+    adPrivacyOptionsRequired = consentInfo.privacyOptionsRequirementStatus === 'REQUIRED';
+    updateAdPrivacySectionVisibility();
   } catch (error) {
     console.error('AdMob initialize error:', error);
   }
+}
+
+// 設定画面の「広告のプライバシー設定」欄を、同意状況に応じて表示・非表示する
+function updateAdPrivacySectionVisibility() {
+  elements.settingsAdPrivacySection.classList.toggle('hidden', !(IS_NATIVE_APP && adPrivacyOptionsRequired));
 }
 
 async function showModeBannerAd() {
@@ -2599,7 +2631,22 @@ function registerEventListeners() {
     updateFolderNameDisplay();
     updateUpgradeSectionDisplay();
     renderTagManagementList();
+    updateAdPrivacySectionVisibility();
     showScreen('screen-settings');
+  });
+
+  // 設定画面：広告の同意設定（プライバシーオプション）を開く
+  elements.btnAdPrivacyOptions.addEventListener('click', () => {
+    window.Capacitor.Plugins.AdMob.showPrivacyOptionsForm()
+      .then(() => window.Capacitor.Plugins.AdMob.requestConsentInfo({
+        debugGeography: 1,
+        testDeviceIdentifiers: ADMOB_TEST_DEVICE_IDS
+      }))
+      .then(consentInfo => {
+        adPrivacyOptionsRequired = consentInfo.privacyOptionsRequirementStatus === 'REQUIRED';
+        updateAdPrivacySectionVisibility();
+      })
+      .catch(error => console.error('AdMob showPrivacyOptionsForm error:', error));
   });
   elements.btnAddCard.addEventListener('click', openAddCardScreen);
 
