@@ -56,9 +56,12 @@ let STATE = {
   // lateralPos: 「ダイナミック」表示スタイルでの横方向の見た目上の位置（0=インコース〜5=アウトコース、勝敗には無関係）
   // spreadTargets: 終盤に広がる際の、出走者ごとのランダムな目標レーン（レースごとに再抽選）
   derby: { cards: [], progress: [], finishOrder: [], racing: false, lateralPos: [], spreadTargets: [] },
-  // 名刺登録上限解除（アプリ内課金）を購入済みかどうか。起動直後はこの端末での直近の確認結果を暫定表示し、
+  // 名刺登録上限解除＋広告非表示（アプリ内課金）を購入済みかどうか。起動直後はこの端末での直近の確認結果を暫定表示し、
   // checkProEntitlement()でGoogle Play Billingの実際の購入状況に基づいて確定させる
   isPro: localStorage.getItem('isPro') === '1',
+  // クローズドテスト中に無償付与された場合はtrue（CLOSED_TESTING_AUTO_UNLOCK参照）。
+  // 一度付与したら、実購入の有無に関わらず取り消さない（テスターが本番公開後もそのまま使い続けられるように）
+  freeAccessGranted: localStorage.getItem('freeAccessGranted') === '1',
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -70,15 +73,16 @@ const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 // Google Picker API用のAPIキー（HTTPリファラー制限・Picker APIのみに制限済みのため、公開して問題ない）
 const GOOGLE_PICKER_API_KEY = 'AIzaSyC9UqDIBywV5jYaT_qjLwB0iEPXXt7SfKM';
 
-// 名刺登録上限のアプリ内課金機能を有効にするかどうか。クローズドテスト中はfalseにして、
-// テスターが上限やアップグレード画面に触れず無制限に登録できるようにする。
-// 本番公開時にtrueへ戻す
-const IAP_ENABLED = false;
 // 無料版で登録できる名刺の上限。これを超える新規登録にはアップグレード（アプリ内課金）が必要
 const CARD_FREE_LIMIT = 10;
-// Google Play Consoleで作成するアプリ内アイテム（名刺登録上限解除）のプロダクトID。
+// Google Play Consoleで作成するアプリ内アイテム（名刺登録上限解除＋広告非表示、1つの買い切り）のプロダクトID。
 // Play Console側の設定と必ず一致させること
-const IAP_UNLOCK_PRODUCT_ID = 'unlock_unlimited_cards';
+const IAP_UNLOCK_PRODUCT_ID = 'unlock_all_features';
+// クローズドテスト中は初回起動時に自動でアップグレード特典（上限解除＋広告非表示）を無償付与する。
+// 一度付与された端末はfreeAccessGrantedがtrueのまま残り続けるため、本番公開後にこの値をfalseへ
+// 戻しても、既存テスターの特典は失われない（付与済みかどうかはfreeAccessGranted自体で判定するため）。
+// 本番公開のタイミングでfalseへ切り替えること
+const CLOSED_TESTING_AUTO_UNLOCK = true;
 
 // -------------------------------------------------------------
 // I18N（UIの表示言語のみ切り替える。名刺データ自体は翻訳しない）
@@ -127,15 +131,15 @@ const I18N = {
     headingMissions: 'ミッション',
     headingUpgrade: 'アップグレード',
     upgradeLimitTitle: '無料版は名刺10枚までです',
-    upgradeLimitDesc: 'アップグレードすると、名刺の登録上限がなくなり、何枚でも登録できるようになります。',
+    upgradeLimitDesc: 'アップグレードすると、名刺の登録上限がなくなり何枚でも登録できるようになり、さらに広告も表示されなくなります。',
     btnUpgradePurchase: 'アップグレード',
     upgradeUnavailableNote: 'この環境では購入機能をご利用いただけません（Playストア版アプリでのみご利用いただけます）',
-    toastUpgradeSuccess: 'アップグレードが完了しました。名刺登録の上限がなくなりました！',
+    toastUpgradeSuccess: 'アップグレードが完了しました。名刺登録の上限がなくなり、広告も表示されなくなりました！',
     toastUpgradeError: '購入処理中にエラーが発生しました',
     headingUpgradeSection: 'アップグレード',
-    btnOpenUpgrade: 'アップグレードして上限解除',
+    btnOpenUpgrade: 'アップグレードして上限解除・広告非表示',
     settingsUpgradeFreeDesc: `現在、名刺登録は${CARD_FREE_LIMIT}枚までの無料版です。`,
-    settingsUpgradeProDesc: '✨ アップグレード済みです。名刺は上限なく登録できます。',
+    settingsUpgradeProDesc: '✨ アップグレード済みです。名刺は上限なく登録でき、広告も表示されません。',
     missionThreshold: '{count}枚登録',
     missionDailyRegistration: '1日に{count}枚登録',
     missionCardsWithMemo10: 'メモありで名刺を10枚登録',
@@ -450,15 +454,15 @@ const I18N = {
     headingMissions: 'Missions',
     headingUpgrade: 'Upgrade',
     upgradeLimitTitle: 'The free version is limited to 10 cards',
-    upgradeLimitDesc: 'Upgrading removes the card limit, letting you register as many cards as you like.',
+    upgradeLimitDesc: 'Upgrading removes the card limit, letting you register as many cards as you like, and also removes ads.',
     btnUpgradePurchase: 'Upgrade',
     upgradeUnavailableNote: 'Purchases aren\'t available in this environment (only in the Play Store app)',
-    toastUpgradeSuccess: 'Upgrade complete. The card limit has been removed!',
+    toastUpgradeSuccess: 'Upgrade complete. The card limit has been removed and ads are gone!',
     toastUpgradeError: 'An error occurred during the purchase',
     headingUpgradeSection: 'Upgrade',
-    btnOpenUpgrade: 'Upgrade to remove the limit',
+    btnOpenUpgrade: 'Upgrade to remove the limit and ads',
     settingsUpgradeFreeDesc: `You're currently on the free version, limited to ${CARD_FREE_LIMIT} cards.`,
-    settingsUpgradeProDesc: '✨ You\'re upgraded — no card limit.',
+    settingsUpgradeProDesc: '✨ You\'re upgraded — no card limit and no ads.',
     missionThreshold: '{count}-card milestone',
     missionDailyRegistration: 'Register {count} cards in one day',
     missionCardsWithMemo10: 'Register 10 cards with a memo',
@@ -987,6 +991,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+  // クローズドテスト中は、初回起動時にアップグレード特典を無償付与する（本番公開後もそのまま維持される）
+  grantFreeAccessForClosedTestingIfNeeded();
+
   // SVGアイコンをLucideでレンダリング
   lucide.createIcons();
 
@@ -1007,7 +1014,7 @@ function initApp() {
   }
 
   // 実際の購入状況（Google Play Billing）をバックグラウンドで確認
-  if (IAP_ENABLED) checkProEntitlement();
+  if (IS_NATIVE_APP) checkProEntitlement();
 
   // セッション有効性のチェック
   checkSession();
@@ -1062,7 +1069,8 @@ function showScreen(screenId) {
   lucide.createIcons();
 
   // 対戦系モード（合戦・デュエル・ダービー）を開いている間だけバナー広告を表示する
-  if (AD_ENABLED_SCREENS.has(screenId)) {
+  // （アップグレード特典が有効な場合は広告自体を出さない）
+  if (AD_ENABLED_SCREENS.has(screenId) && !hasProAccess()) {
     showModeBannerAd();
   } else {
     hideModeBannerAd();
@@ -2517,47 +2525,48 @@ async function openEditCard(cardId) {
 }
 
 // -------------------------------------------------------------
-// IN-APP PURCHASE（名刺登録上限解除。Google Play BillingをDigital Goods API経由で利用）
+// IN-APP PURCHASE（名刺登録上限解除＋広告非表示。@capgo/native-purchases経由でGoogle Play Billingを利用）
 // -------------------------------------------------------------
-let digitalGoodsService = null;
 
-// この環境（Playストア経由でインストールされたTWA）でGoogle Play Billingが使えるかどうかを確認し、
-// 使える場合はDigitalGoodsServiceを初期化する。通常のブラウザ等、非対応の環境ではnullを返す
-async function initDigitalGoodsService() {
-  if (digitalGoodsService) return digitalGoodsService;
-  if (!('getDigitalGoodsService' in window)) return null;
-  try {
-    digitalGoodsService = await window.getDigitalGoodsService('https://play.google.com/billing');
-    return digitalGoodsService;
-  } catch (err) {
-    console.warn('Digital Goods API is not available in this environment:', err);
-    return null;
-  }
+// アップグレード特典（上限解除＋広告非表示）が有効かどうか。実購入済み、またはクローズドテスト中の
+// 無償付与済み（freeAccessGranted）のいずれかであればtrue
+function hasProAccess() {
+  return STATE.isPro || STATE.freeAccessGranted;
+}
+
+// クローズドテスト中、この端末で初めて起動された際に一度だけアップグレード特典を無償付与する
+function grantFreeAccessForClosedTestingIfNeeded() {
+  if (!IS_NATIVE_APP || !CLOSED_TESTING_AUTO_UNLOCK) return;
+  if (localStorage.getItem('freeAccessGranted') !== null) return; // 既に判定済み（付与済み／このロジック導入前の端末）
+  STATE.freeAccessGranted = true;
+  localStorage.setItem('freeAccessGranted', '1');
 }
 
 // 実際の購入状況（Google Play Billing）を確認し、STATE.isProを確定させる。アプリ起動時に一度呼び出す。
 // 取得に失敗した場合は、前回この端末で確認できていたキャッシュ値（localStorage）をそのまま維持する
 async function checkProEntitlement() {
-  const service = await initDigitalGoodsService();
-  if (!service) return;
-
+  if (!IS_NATIVE_APP) return;
   try {
-    const purchases = await service.listPurchases();
-    const owned = purchases.some(p => p.itemId === IAP_UNLOCK_PRODUCT_ID);
+    const { purchases } = await window.Capacitor.Plugins.NativePurchases.getPurchases({ productType: 'inapp' });
+    const owned = purchases.some(
+      (p) => p.productIdentifier === IAP_UNLOCK_PRODUCT_ID && (p.purchaseState === 'PURCHASED' || p.purchaseState === '1')
+    );
     STATE.isPro = owned;
     localStorage.setItem('isPro', owned ? '1' : '0');
+    updateUpgradeSectionDisplay();
   } catch (err) {
     console.error('Failed to check purchase status:', err);
   }
 }
 
 // 設定画面の「アップグレード」欄を、現在の購入状態（STATE.isPro）に応じて更新する。
-// IAP_ENABLEDがfalseの間（クローズドテスト中など）は欄ごと非表示にする
+// 課金はネイティブアプリでのみ利用できるため、それ以外の環境では欄ごと非表示にする
 function updateUpgradeSectionDisplay() {
-  elements.settingsUpgradeSection.classList.toggle('hidden', !IAP_ENABLED);
-  if (!IAP_ENABLED) return;
-  elements.settingsUpgradeStatus.textContent = STATE.isPro ? t('settingsUpgradeProDesc') : t('settingsUpgradeFreeDesc');
-  elements.btnOpenUpgrade.classList.toggle('hidden', STATE.isPro);
+  elements.settingsUpgradeSection.classList.toggle('hidden', !IS_NATIVE_APP);
+  if (!IS_NATIVE_APP) return;
+  const pro = hasProAccess();
+  elements.settingsUpgradeStatus.textContent = pro ? t('settingsUpgradeProDesc') : t('settingsUpgradeFreeDesc');
+  elements.btnOpenUpgrade.classList.toggle('hidden', pro);
 }
 
 // アップグレード画面で「閉じる」を押した際、開いた場所（メイン画面／設定画面）へ正しく戻すための記録
@@ -2571,7 +2580,7 @@ function openUpgradeScreen(returnTo) {
 
 // 新規登録画面を開く。無料版の上限（CARD_FREE_LIMIT）に達している場合はアップグレード画面へ誘導する
 function openAddCardScreen() {
-  if (IAP_ENABLED && !STATE.isPro && STATE.cards.length >= CARD_FREE_LIMIT) {
+  if (IS_NATIVE_APP && !hasProAccess() && STATE.cards.length >= CARD_FREE_LIMIT) {
     openUpgradeScreen('screen-main');
     return;
   }
@@ -2584,49 +2593,47 @@ async function loadUpgradeScreenDetails() {
   elements.upgradePriceLabel.textContent = t('btnUpgradePurchase');
   elements.upgradeUnavailableNote.classList.add('hidden');
 
-  const service = await initDigitalGoodsService();
-  if (!service) {
+  if (!IS_NATIVE_APP) {
     elements.upgradeUnavailableNote.classList.remove('hidden');
     return;
   }
 
   try {
-    const details = await service.getDetails([IAP_UNLOCK_PRODUCT_ID]);
-    const item = details && details[0];
-    if (item && item.price) {
-      elements.upgradePriceLabel.textContent = `${t('btnUpgradePurchase')} (${item.price.value} ${item.price.currency})`;
+    const { isBillingSupported } = await window.Capacitor.Plugins.NativePurchases.isBillingSupported();
+    if (!isBillingSupported) {
+      elements.upgradeUnavailableNote.classList.remove('hidden');
+      return;
+    }
+    const { product } = await window.Capacitor.Plugins.NativePurchases.getProduct({
+      productIdentifier: IAP_UNLOCK_PRODUCT_ID,
+      productType: 'inapp'
+    });
+    if (product && product.priceString) {
+      elements.upgradePriceLabel.textContent = `${t('btnUpgradePurchase')} (${product.priceString})`;
     }
   } catch (err) {
     console.error('Failed to fetch product details:', err);
+    elements.upgradeUnavailableNote.classList.remove('hidden');
   }
 }
 
-// アップグレード（名刺登録上限解除）の購入フローを開始する
+// アップグレード（名刺登録上限解除＋広告非表示）の購入フローを開始する
 async function purchaseUpgrade() {
-  if (STATE.isPro) return;
-
-  const service = await initDigitalGoodsService();
-  if (!service || !('PaymentRequest' in window)) {
+  if (hasProAccess()) return;
+  if (!IS_NATIVE_APP) {
     elements.upgradeUnavailableNote.classList.remove('hidden');
     return;
   }
 
   try {
-    const details = await service.getDetails([IAP_UNLOCK_PRODUCT_ID]);
-    const item = details && details[0];
-    if (!item) {
+    const transaction = await window.Capacitor.Plugins.NativePurchases.purchaseProduct({
+      productIdentifier: IAP_UNLOCK_PRODUCT_ID,
+      productType: 'inapp'
+    });
+    if (transaction.purchaseState !== 'PURCHASED' && transaction.purchaseState !== '1') {
       showToast(t('toastUpgradeError'));
       return;
     }
-
-    const request = new PaymentRequest(
-      [{ supportedMethods: 'https://play.google.com/billing', data: { sku: IAP_UNLOCK_PRODUCT_ID } }],
-      { total: { label: item.title, amount: { currency: item.price.currency, value: item.price.value } } }
-    );
-
-    const paymentResponse = await request.show();
-    await paymentResponse.complete('success');
-    await service.acknowledge(paymentResponse.details.token, 'onetime');
 
     STATE.isPro = true;
     localStorage.setItem('isPro', '1');
@@ -2634,7 +2641,7 @@ async function purchaseUpgrade() {
     showScreen('screen-main');
     renderApp();
   } catch (err) {
-    if (err.name === 'AbortError') return; // ユーザーによるキャンセル
+    if (err.message && err.message.toLowerCase().includes('cancel')) return; // ユーザーによるキャンセル
     console.error('Purchase failed:', err);
     showToast(t('toastUpgradeError'));
   }
