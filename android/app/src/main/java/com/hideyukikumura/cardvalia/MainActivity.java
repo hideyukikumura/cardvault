@@ -1,7 +1,6 @@
 package com.hideyukikumura.cardvalia;
 
 import android.graphics.Color;
-import android.os.Build;
 import android.os.Bundle;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -12,23 +11,16 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // エッジトゥエッジ表示：ステータスバー／ジェスチャーバーの背景を透過にし、
-        // アプリの背景の上に時計・バッテリー等のアイコンだけが重なって見えるようにする
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
-        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        // エッジトゥエッジは使用しない：パンチホールカメラ付き端末で、中央寄せのヘッダー文言等が
+        // カメラ穴と重なる問題があったため、OSに標準のステータスバー／ジェスチャーバー領域を
+        // 確保させる（システムがカメラの穴を含む高さを自動的に避けてくれる）。
+        // その上で、アプリのダークテーマに合わせてバーの色とアイコンの明暗だけ調整する。
+        getWindow().setStatusBarColor(Color.parseColor("#090d16"));
+        getWindow().setNavigationBarColor(Color.parseColor("#090d16"));
 
         WindowInsetsControllerCompat controller =
             WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        // アプリの背景が濃色のため、バーのアイコンは白系（ライトでない）にする
         controller.setAppearanceLightStatusBars(false);
         controller.setAppearanceLightNavigationBars(false);
-
-        // Android 10以降は透過バーの視認性確保のため、デフォルトで半透明の網掛け（コントラスト強制）が
-        // 自動的に重なる。これがナビゲーションバーだけ白っぽく残って見える原因のため無効化する
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            getWindow().setStatusBarContrastEnforced(false);
-            getWindow().setNavigationBarContrastEnforced(false);
-        }
     }
 }
