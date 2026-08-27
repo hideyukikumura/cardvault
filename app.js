@@ -1289,6 +1289,17 @@ async function ensureAdMobInitialized() {
   try {
     await window.Capacitor.Plugins.AdMob.initialize({ testingDevices: ADMOB_TEST_DEVICE_IDS });
 
+    // バナー広告の実際の高さに合わせて、対戦系画面の下部に余白を確保する
+    // （広告に隠れて「合戦開始」ボタン等が見えなくなるのを防ぐため）。
+    // 広告の自動更新が一時的に失敗した際も高さ0の通知が来るが、その間も広告自体は
+    // 表示され続ける（＝余白を詰めてはいけない）ため、0はここでは無視し、
+    // 実際に画面を離れる際（hideModeBannerAd）にのみ余白をリセットする
+    window.Capacitor.Plugins.AdMob.addListener('bannerAdSizeChanged', (info) => {
+      if (info.height > 0) {
+        document.documentElement.style.setProperty('--ad-banner-height', `${info.height}px`);
+      }
+    });
+
     // GDPR等の同意確認（UMP）。対象地域のユーザーには、広告表示前に同意フォームを提示する。
     // debugGeography:1(EEA)はADMOB_TEST_DEVICE_IDSに登録した端末にしか作用しないため、
     // 実際のユーザーの地域判定には影響しない（このアプリの動作確認用）
@@ -1311,17 +1322,27 @@ function updateAdPrivacySectionVisibility() {
   elements.settingsAdPrivacySection.classList.toggle('hidden', !(IS_NATIVE_APP && adPrivacyOptionsRequired));
 }
 
+// @capacitor-community/admobの仕様上、showBanner()はバナー未作成時にしか実際の表示処理をしない
+// （2回目以降はhideBanner()で隠した状態から復帰せず、非表示のまま残ってしまう）。
+// そのため、一度作成済みかどうかをこちらで覚えておき、2回目以降はresumeBanner()を使う。
+let bannerAdCreated = false;
+
 async function showModeBannerAd() {
   if (!IS_NATIVE_APP || modeBannerVisible) return;
   modeBannerVisible = true;
   try {
     await ensureAdMobInitialized();
-    await window.Capacitor.Plugins.AdMob.showBanner({
-      adId: ADMOB_BANNER_AD_UNIT_ID,
-      adSize: 'ADAPTIVE_BANNER',
-      position: 'BOTTOM_CENTER',
-      margin: 0
-    });
+    if (bannerAdCreated) {
+      await window.Capacitor.Plugins.AdMob.resumeBanner();
+    } else {
+      bannerAdCreated = true;
+      await window.Capacitor.Plugins.AdMob.showBanner({
+        adId: ADMOB_BANNER_AD_UNIT_ID,
+        adSize: 'ADAPTIVE_BANNER',
+        position: 'BOTTOM_CENTER',
+        margin: 0
+      });
+    }
   } catch (error) {
     console.error('AdMob showBanner error:', error);
   }
@@ -1330,6 +1351,7 @@ async function showModeBannerAd() {
 async function hideModeBannerAd() {
   if (!IS_NATIVE_APP || !modeBannerVisible) return;
   modeBannerVisible = false;
+  document.documentElement.style.setProperty('--ad-banner-height', '0px');
   try {
     await window.Capacitor.Plugins.AdMob.hideBanner();
   } catch (error) {

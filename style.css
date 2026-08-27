@@ -128,6 +128,14 @@ body {
   overflow-y: auto;
 }
 
+/* 合戦・デュエル・ダービーの各モードはネイティブアプリでバナー広告が画面下部に重なるため、
+   広告の実測高さ（--ad-banner-height、広告非表示時は0）分だけ下部の余白を確保する */
+#screen-kassen .screen-content,
+#screen-duel .screen-content,
+#screen-derby .screen-content {
+  padding-bottom: var(--ad-banner-height, 0px);
+}
+
 /* -----------------------------------------
    1. AUTH SCREEN (ログイン画面)
 ----------------------------------------- */
