@@ -83,9 +83,11 @@ body {
   overflow: hidden;
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
   /* ネイティブアプリ（エッジトゥエッジ）で、ステータスバー・ジェスチャーバーの領域に
-     コンテンツが隠れないようにする。対応していないブラウザではenv()が0扱いになり無視される */
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+     コンテンツが隠れないようにする。標準ブラウザ向けのenv()に加え、Capacitorの
+     SystemBarsプラグインが注入する独自のCSSカスタムプロパティ --safe-area-inset-* も
+     考慮する（Android版WebViewはenv()だけでは正しく解決されない端末があるため） */
+  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
 }
 
 .screen {
