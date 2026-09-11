@@ -92,7 +92,7 @@ body {
      位置に影響しない（CSS仕様上、絶対配置の基準は親のパディングエッジ＝パディングを
      含めた外側の境界になるため）。実際の値は--safe-top/--safe-bottomとして.screen側で
      直接使用する */
-  --safe-top: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)) + 16px);
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
 }
 
