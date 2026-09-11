@@ -86,18 +86,22 @@ body {
      コンテンツが隠れないようにする。標準ブラウザ向けのenv()に加え、Capacitorの
      SystemBarsプラグインが注入する独自のCSSカスタムプロパティ --safe-area-inset-* も
      考慮する（Android版WebViewはenv()だけでは正しく解決されない端末があるため）。
-     上部はパンチホールカメラの実測より申告インセットが小さい機種があった実績があるため、
-     安全マージンとして追加分を大きめに確保する */
-  padding-top: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)) + 16px);
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+     上部はノッチ／パンチホールカメラの実測より申告インセットが小さい機種があった実績が
+     あるため、安全マージンとして追加分を大きめに確保する。
+     ※ .screenがposition:absoluteのため、ここでのpadding自体は絶対配置された子要素の
+     位置に影響しない（CSS仕様上、絶対配置の基準は親のパディングエッジ＝パディングを
+     含めた外側の境界になるため）。実際の値は--safe-top/--safe-bottomとして.screen側で
+     直接使用する */
+  --safe-top: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)) + 16px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
 }
 
 .screen {
   position: absolute;
-  top: 0;
+  top: var(--safe-top, 0px);
   left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% - var(--safe-top, 0px) - var(--safe-bottom, 0px));
   opacity: 0;
   pointer-events: none;
   transform: translateY(15px);
