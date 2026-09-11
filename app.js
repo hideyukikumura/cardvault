@@ -82,7 +82,7 @@ const IAP_UNLOCK_PRODUCT_ID = 'unlock_all_features';
 // 一度付与された端末はfreeAccessGrantedがtrueのまま残り続けるため、本番公開後にこの値をfalseへ
 // 戻しても、既存テスターの特典は失われない（付与済みかどうかはfreeAccessGranted自体で判定するため）。
 // 本番公開のタイミングでfalseへ切り替えること
-const CLOSED_TESTING_AUTO_UNLOCK = true;
+const CLOSED_TESTING_AUTO_UNLOCK = false;
 
 // -------------------------------------------------------------
 // I18N（UIの表示言語のみ切り替える。名刺データ自体は翻訳しない）

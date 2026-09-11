@@ -2,25 +2,21 @@ package com.hideyukikumura.cardvalia;
 
 import android.graphics.Color;
 import android.os.Bundle;
-import androidx.core.view.WindowCompat;
-import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.activity.EdgeToEdge;
+import androidx.activity.SystemBarStyle;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Android 15（targetSdkVersion 35）以降はOSがアプリを強制的にエッジトゥエッジ表示にするため、
+        // 独自コードで無効化することはできない。Google公式のEdgeToEdge APIに任せることで、
+        // OSバージョンごとのインセット処理の差異を正しく吸収してもらう
+        // （Play Consoleの事前起動レポートで指摘された「非推奨API使用」
+        // 「一部端末でエッジトゥエッジが正しく有効にならない」を解消するため）。
+        // 一般的にはsuper.onCreate()より前に呼ぶのが推奨されるが、BridgeActivity（AppCompatActivity）では
+        // super.onCreate()内のAppCompat初期化処理が先に走らないと設定が反映されなかったため、後に呼ぶ
         super.onCreate(savedInstanceState);
-
-        // エッジトゥエッジは使用しない：パンチホールカメラ付き端末で、中央寄せのヘッダー文言等が
-        // カメラ穴と重なる問題があったため、OSに標準のステータスバー／ジェスチャーバー領域を
-        // 確保させる（システムがカメラの穴を含む高さを自動的に避けてくれる）。
-        // その上で、アプリのダークテーマに合わせてバーの色とアイコンの明暗だけ調整する。
-        getWindow().setStatusBarColor(Color.parseColor("#090d16"));
-        getWindow().setNavigationBarColor(Color.parseColor("#090d16"));
-
-        WindowInsetsControllerCompat controller =
-            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        controller.setAppearanceLightStatusBars(false);
-        controller.setAppearanceLightNavigationBars(false);
+        EdgeToEdge.enable(this, SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT));
     }
 }
