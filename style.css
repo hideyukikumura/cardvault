@@ -85,8 +85,10 @@ body {
   /* ネイティブアプリ（エッジトゥエッジ）で、ステータスバー・ジェスチャーバーの領域に
      コンテンツが隠れないようにする。標準ブラウザ向けのenv()に加え、Capacitorの
      SystemBarsプラグインが注入する独自のCSSカスタムプロパティ --safe-area-inset-* も
-     考慮する（Android版WebViewはenv()だけでは正しく解決されない端末があるため） */
-  padding-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+     考慮する（Android版WebViewはenv()だけでは正しく解決されない端末があるため）。
+     上部はパンチホールカメラの実測より申告インセットが小さい機種があった実績があるため、
+     安全マージンとして追加分を大きめに確保する */
+  padding-top: calc(max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px)) + 16px);
   padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
 }
 
