@@ -5223,6 +5223,9 @@ function drawDerbyLineup() {
   elements.derbyLineup.classList.toggle('hidden', notEnough);
   elements.btnStartDerby.classList.toggle('hidden', notEnough);
   elements.btnDerbyReselect.classList.toggle('hidden', notEnough);
+  // 名刺不足の空状態表示中は.derby-matchの高さが潰れ、絶対配置の空状態メッセージと
+  // 開催数バッジ（position:staticでフローに乗る）が重なってしまうため、バッジ自体を隠す
+  elements.derbyBattleCount.classList.toggle('hidden', notEnough);
   elements.derbyCommentary.classList.add('hidden');
   elements.derbyCommentaryText.textContent = '';
   elements.derbyBonusBadge.classList.add('hidden');

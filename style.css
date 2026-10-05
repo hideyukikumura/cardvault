@@ -554,6 +554,12 @@ body {
   padding: 0 40px;
 }
 
+/* 名刺が0件（空状態メッセージのみ）の場合は、左paddingの影響で左寄りに
+   見えないよう中央寄せにする。名刺がある通常のスワイプ表示には影響しない */
+.card-deck:has(.empty-state) {
+  justify-content: center;
+}
+
 .card-deck::-webkit-scrollbar {
   display: none;
 }
