@@ -984,6 +984,27 @@ body {
   transform: translate(-50%, -50%);
 }
 
+/* 角のドラッグ中、指に隠れないよう離れた位置に表示する拡大鏡。
+   #screen-crop（position:absoluteかつtransform指定あり）が絶対配置の基準になる */
+.crop-magnifier {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid var(--accent-indigo);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  z-index: 50;
+  transform: translate(-50%, -50%);
+}
+
+.crop-magnifier canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .crop-hint {
   color: var(--text-secondary);
   font-size: 0.85rem;

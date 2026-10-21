@@ -863,6 +863,9 @@ const elements = {
   cropMoveArea: document.getElementById('crop-move-area'),
   cropOutline: document.getElementById('crop-outline'),
   cropHandles: Array.from(document.querySelectorAll('#crop-image-wrapper .crop-handle')),
+  cropMagnifier: document.getElementById('crop-magnifier'),
+  cropMagnifierCanvas: document.getElementById('crop-magnifier-canvas'),
+  cropScreen: document.getElementById('screen-crop'),
   btnCropCancel: document.getElementById('btn-crop-cancel'),
   btnCropConfirm: document.getElementById('btn-crop-confirm'),
   // Settings Screen
@@ -3124,6 +3127,9 @@ function startCropDrag(cornerIndex, pointerEvent) {
     wrapperW: elements.cropImage.clientWidth,
     wrapperH: elements.cropImage.clientHeight
   };
+  if (cornerIndex !== null) {
+    updateCropMagnifier(pointerEvent, cropPoints[cornerIndex]);
+  }
 }
 
 function updateCropDrag(pointerEvent) {
@@ -3150,6 +3156,7 @@ function updateCropDrag(pointerEvent) {
         y: clamp(p.y + dy, 0, wrapperH)
       };
     });
+    updateCropMagnifier(pointerEvent, cropPoints[cornerIndex]);
   }
 
   applyCropPoints();
@@ -3157,6 +3164,64 @@ function updateCropDrag(pointerEvent) {
 
 function endCropDrag() {
   cropDrag = null;
+  elements.cropMagnifier.classList.add('hidden');
+}
+
+const CROP_MAGNIFIER_SIZE = 150; // ルーペのCSS表示サイズ（px）。canvasのwidth/heightと一致させる
+const CROP_MAGNIFIER_ZOOM = 2.5; // 拡大率
+
+// 角をドラッグ中、指に隠れない位置にルーペを表示し、指定した点（表示px基準）を中心に
+// 拡大した画像と十字のターゲットマーカーを描画する。指先そのものではなく少し離れた位置に
+// 表示することで、正確に名刺の角へ位置合わせできるようにする
+function updateCropMagnifier(pointerEvent, point) {
+  const size = CROP_MAGNIFIER_SIZE;
+  const ctx = elements.cropMagnifierCanvas.getContext('2d');
+  const scaleX = elements.cropImage.naturalWidth / elements.cropImage.clientWidth;
+  const scaleY = elements.cropImage.naturalHeight / elements.cropImage.clientHeight;
+  const regionSize = size / CROP_MAGNIFIER_ZOOM; // 元画像から切り出す範囲の一辺（表示px基準）
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.drawImage(
+    elements.cropImage,
+    (point.x - regionSize / 2) * scaleX,
+    (point.y - regionSize / 2) * scaleY,
+    regionSize * scaleX,
+    regionSize * scaleY,
+    0, 0, size, size
+  );
+
+  // 中心の十字＋円のターゲットマーカー（＝実際に設定される角の位置）
+  const center = size / 2;
+  ctx.strokeStyle = 'rgba(99, 102, 241, 0.95)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(center - 12, center);
+  ctx.lineTo(center - 4, center);
+  ctx.moveTo(center + 4, center);
+  ctx.lineTo(center + 12, center);
+  ctx.moveTo(center, center - 12);
+  ctx.lineTo(center, center - 4);
+  ctx.moveTo(center, center + 4);
+  ctx.lineTo(center, center + 12);
+  ctx.arc(center, center, 6, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // ルーペ自体は指から離れた位置（基本は上、画面上端に近い場合は下）に表示する
+  const screenRect = elements.cropScreen.getBoundingClientRect();
+  const touchX = pointerEvent.clientX - screenRect.left;
+  const touchY = pointerEvent.clientY - screenRect.top;
+  const verticalOffset = 110;
+  const margin = size / 2 + 8;
+
+  let magnifierY = touchY - verticalOffset;
+  if (magnifierY - size / 2 < 0) {
+    magnifierY = touchY + verticalOffset;
+  }
+  const magnifierX = clamp(touchX, margin, screenRect.width - margin);
+
+  elements.cropMagnifier.style.left = `${magnifierX}px`;
+  elements.cropMagnifier.style.top = `${magnifierY}px`;
+  elements.cropMagnifier.classList.remove('hidden');
 }
 
 function clamp(value, min, max) {

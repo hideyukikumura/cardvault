@@ -269,6 +269,12 @@
           <p class="crop-hint" data-i18n="cropHint">四隅を名刺の角に合わせてドラッグしてください。斜めから撮影した写真も正対補正されます</p>
         </div>
       </div>
+
+      <!-- 角をドラッグ中、指で隠れずに正確な位置合わせができるよう拡大表示するルーペ。
+           .screen-content（overflow:auto）の外に置き、クリップされないようにする -->
+      <div id="crop-magnifier" class="crop-magnifier hidden">
+        <canvas id="crop-magnifier-canvas" width="150" height="150"></canvas>
+      </div>
     </section>
 
     <!-- 4. SETTINGS SCREEN (設定モーダル/画面) -->
