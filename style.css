@@ -943,14 +943,33 @@ body {
   -webkit-user-select: none;
 }
 
-.crop-rect {
+.crop-overlay {
   position: absolute;
-  box-sizing: border-box;
-  border: 2px solid var(--accent-indigo);
-  /* 枠の外側を暗くマスクする（枠自体のbox-shadowを親のoverflowで切り抜く） */
-  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.6);
-  cursor: move;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   touch-action: none;
+}
+
+/* 4隅で囲んだ範囲の外側を暗くマスクする（evenoddで外枠と内側の四角形の差分だけ塗る） */
+.crop-mask {
+  fill: rgba(15, 23, 42, 0.6);
+  pointer-events: none;
+}
+
+/* 四角形の内側をドラッグして4隅をまとめて平行移動できるようにする当たり判定
+   （fill=transparentだが、pointer-eventsをallにして未塗装部分でもヒットさせる） */
+.crop-move-area {
+  fill: transparent;
+  pointer-events: all;
+  cursor: move;
+}
+
+.crop-outline {
+  fill: none;
+  stroke: var(--accent-indigo);
+  stroke-width: 2;
+  pointer-events: none;
 }
 
 .crop-handle {
@@ -961,12 +980,9 @@ body {
   border: 2px solid var(--accent-indigo);
   border-radius: 50%;
   touch-action: none;
+  cursor: grab;
+  transform: translate(-50%, -50%);
 }
-
-.crop-handle-nw { top: 0; left: 0; transform: translate(-50%, -50%); cursor: nwse-resize; }
-.crop-handle-ne { top: 0; right: 0; transform: translate(50%, -50%); cursor: nesw-resize; }
-.crop-handle-sw { bottom: 0; left: 0; transform: translate(-50%, 50%); cursor: nesw-resize; }
-.crop-handle-se { bottom: 0; right: 0; transform: translate(50%, 50%); cursor: nwse-resize; }
 
 .crop-hint {
   color: var(--text-secondary);

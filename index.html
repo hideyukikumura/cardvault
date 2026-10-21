@@ -254,14 +254,19 @@
         <div class="crop-body">
           <div id="crop-image-wrapper" class="crop-image-wrapper">
             <img id="crop-image" src="" alt="" draggable="false">
-            <div id="crop-rect" class="crop-rect">
-              <div class="crop-handle crop-handle-nw" data-handle="nw"></div>
-              <div class="crop-handle crop-handle-ne" data-handle="ne"></div>
-              <div class="crop-handle crop-handle-sw" data-handle="sw"></div>
-              <div class="crop-handle crop-handle-se" data-handle="se"></div>
-            </div>
+            <!-- 4隅を自由にドラッグして名刺の角に合わせ、斜めから撮影した写真でも
+                 正対補正（パースペクティブ補正）した状態で切り抜く -->
+            <svg id="crop-overlay" class="crop-overlay">
+              <path id="crop-mask" class="crop-mask" fill-rule="evenodd"></path>
+              <polygon id="crop-move-area" class="crop-move-area"></polygon>
+              <polygon id="crop-outline" class="crop-outline"></polygon>
+            </svg>
+            <div class="crop-handle" data-corner="0"></div>
+            <div class="crop-handle" data-corner="1"></div>
+            <div class="crop-handle" data-corner="2"></div>
+            <div class="crop-handle" data-corner="3"></div>
           </div>
-          <p class="crop-hint" data-i18n="cropHint">四隅をドラッグして範囲を調整し、内側をドラッグして移動できます</p>
+          <p class="crop-hint" data-i18n="cropHint">四隅を名刺の角に合わせてドラッグしてください。斜めから撮影した写真も正対補正されます</p>
         </div>
       </div>
     </section>

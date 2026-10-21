@@ -202,7 +202,7 @@ const I18N = {
     btnCapture: '写真を撮る',
     btnGallery: 'アルバムから選択',
     cropTitle: '写真のトリミング',
-    cropHint: '四隅をドラッグして範囲を調整し、内側をドラッグして移動できます',
+    cropHint: '四隅を名刺の角に合わせてドラッグしてください。斜めから撮影した写真も正対補正されます',
     labelName: '氏名 / 会社名',
     placeholderName: '例：山田 太郎 / 株式会社サンプル',
     labelAlphabet: '検索用アルファベット (半角英数)',
@@ -387,6 +387,7 @@ const I18N = {
     loadingSyncing: 'Googleドライブと同期中...',
     loadingOpeningPicker: 'フォルダ選択ツールを準備中...',
     loadingImage: '画像を読み込み中...',
+    loadingProcessingPhoto: '写真を正対補正しています...',
     loadingDeleting: '名刺を削除中...',
     loadingSavingNew: 'Googleドライブに保存中...',
     loadingSavingEdit: '変更を保存中...',
@@ -525,7 +526,7 @@ const I18N = {
     btnCapture: 'Take Photo',
     btnGallery: 'Choose from Album',
     cropTitle: 'Crop Photo',
-    cropHint: 'Drag the corners to adjust the area, or drag inside to move it',
+    cropHint: 'Drag each corner onto the card\'s edge. Photos taken at an angle will be straightened automatically',
     labelName: 'Name / Company',
     placeholderName: 'e.g. Taro Yamada / Sample Inc.',
     labelAlphabet: 'Alphabet for search (letters/numbers only)',
@@ -710,6 +711,7 @@ const I18N = {
     loadingSyncing: 'Syncing with Google Drive...',
     loadingOpeningPicker: 'Preparing folder picker...',
     loadingImage: 'Loading image...',
+    loadingProcessingPhoto: 'Straightening photo...',
     loadingDeleting: 'Deleting card...',
     loadingSavingNew: 'Saving to Google Drive...',
     loadingSavingEdit: 'Saving changes...',
@@ -856,7 +858,11 @@ const elements = {
   // Crop Screen（撮影・選択した写真のトリミング）
   cropImageWrapper: document.getElementById('crop-image-wrapper'),
   cropImage: document.getElementById('crop-image'),
-  cropRect: document.getElementById('crop-rect'),
+  cropOverlay: document.getElementById('crop-overlay'),
+  cropMask: document.getElementById('crop-mask'),
+  cropMoveArea: document.getElementById('crop-move-area'),
+  cropOutline: document.getElementById('crop-outline'),
+  cropHandles: Array.from(document.querySelectorAll('#crop-image-wrapper .crop-handle')),
   btnCropCancel: document.getElementById('btn-crop-cancel'),
   btnCropConfirm: document.getElementById('btn-crop-confirm'),
   // Settings Screen
@@ -2789,16 +2795,18 @@ function registerEventListeners() {
   });
   elements.btnCropConfirm.addEventListener('click', confirmCrop);
 
-  // トリミング画面：クロップ範囲のドラッグ操作（四隅のハンドル or 範囲内部の移動）
-  elements.cropRect.addEventListener('pointerdown', (e) => {
+  // トリミング画面：4隅のドラッグ操作（個別の角 or 四角形内部をつかんでの平行移動）
+  elements.cropImageWrapper.addEventListener('pointerdown', (e) => {
     const handleEl = e.target.closest('.crop-handle');
-    const handle = handleEl ? handleEl.dataset.handle : 'move';
+    const isMoveArea = e.target === elements.cropMoveArea;
+    if (!handleEl && !isMoveArea) return;
     e.target.setPointerCapture(e.pointerId);
-    startCropDrag(handle, e);
+    const cornerIndex = handleEl ? Number(handleEl.dataset.corner) : null;
+    startCropDrag(cornerIndex, e);
   });
-  elements.cropRect.addEventListener('pointermove', updateCropDrag);
-  elements.cropRect.addEventListener('pointerup', endCropDrag);
-  elements.cropRect.addEventListener('pointercancel', endCropDrag);
+  elements.cropImageWrapper.addEventListener('pointermove', updateCropDrag);
+  elements.cropImageWrapper.addEventListener('pointerup', endCropDrag);
+  elements.cropImageWrapper.addEventListener('pointercancel', endCropDrag);
 
   // 新規登録：タグの追加
   elements.btnAddTag.addEventListener('click', addTagFromInput);
@@ -3061,54 +3069,60 @@ function handleFileSelect(e) {
 let pendingPhotoBlob = null;
 let pendingPhotoObjectUrl = null;
 
-const CROP_MIN_SIZE = 40; // クロップ範囲の最小サイズ（表示px基準）
 const CROP_MAX_OUTPUT_DIM = 1600; // 出力画像の長辺の上限px
+const CROP_SOURCE_MAX_DIM = 2000; // 補正処理用に元画像を読み込む際の上限px（メモリ・速度対策）
 
-let cropDrag = null; // ドラッグ中の状態（handle種別 or 'move'、開始座標・矩形など）
+let cropPoints = null; // 4隅の座標（表示px基準、[左上, 右上, 右下, 左下]の順）
+let cropDrag = null; // ドラッグ中の状態（対象の角のindex、または全体移動、開始座標など）
 
 function openCropScreen(imageDataUrl) {
   elements.cropImage.onload = () => {
     const w = elements.cropImage.clientWidth;
     const h = elements.cropImage.clientHeight;
-    // 初期のクロップ範囲は画像全体に対して90%、中央寄せ
-    const rect = {
-      left: w * 0.05,
-      top: h * 0.05,
-      width: w * 0.9,
-      height: h * 0.9
-    };
-    applyCropRect(rect);
+    // 初期の4隅は画像全体に対して90%、中央寄せの四角形
+    const mx = w * 0.05;
+    const my = h * 0.05;
+    cropPoints = [
+      { x: mx, y: my },
+      { x: w - mx, y: my },
+      { x: w - mx, y: h - my },
+      { x: mx, y: h - my }
+    ];
+    applyCropPoints();
   };
   elements.cropImage.src = imageDataUrl;
   showScreen('screen-crop');
 }
 
-function applyCropRect(rect) {
-  elements.cropRect.style.left = `${rect.left}px`;
-  elements.cropRect.style.top = `${rect.top}px`;
-  elements.cropRect.style.width = `${rect.width}px`;
-  elements.cropRect.style.height = `${rect.height}px`;
+// cropPointsの現在値を、マスク用path・ガイド用polygon・4隅のハンドルDOMに反映する
+function applyCropPoints() {
+  const w = elements.cropImage.clientWidth;
+  const h = elements.cropImage.clientHeight;
+  elements.cropOverlay.setAttribute('viewBox', `0 0 ${w} ${h}`);
+
+  const pointsAttr = cropPoints.map(p => `${p.x},${p.y}`).join(' ');
+  elements.cropMoveArea.setAttribute('points', pointsAttr);
+  elements.cropOutline.setAttribute('points', pointsAttr);
+
+  const outer = `M0,0 H${w} V${h} H0 Z`;
+  const inner = `M${cropPoints.map(p => `${p.x},${p.y}`).join(' L')} Z`;
+  elements.cropMask.setAttribute('d', `${outer} ${inner}`);
+
+  cropPoints.forEach((p, i) => {
+    const handle = elements.cropHandles[i];
+    handle.style.left = `${p.x}px`;
+    handle.style.top = `${p.y}px`;
+  });
 }
 
-function getCropRect() {
-  return {
-    left: parseFloat(elements.cropRect.style.left) || 0,
-    top: parseFloat(elements.cropRect.style.top) || 0,
-    width: parseFloat(elements.cropRect.style.width) || 0,
-    height: parseFloat(elements.cropRect.style.height) || 0
-  };
-}
-
-function startCropDrag(handle, pointerEvent) {
-  const wrapperW = elements.cropImage.clientWidth;
-  const wrapperH = elements.cropImage.clientHeight;
+function startCropDrag(cornerIndex, pointerEvent) {
   cropDrag = {
-    handle,
+    cornerIndex, // nullなら4隅まとめての平行移動
     startX: pointerEvent.clientX,
     startY: pointerEvent.clientY,
-    startRect: getCropRect(),
-    wrapperW,
-    wrapperH
+    startPoints: cropPoints.map(p => ({ ...p })),
+    wrapperW: elements.cropImage.clientWidth,
+    wrapperH: elements.cropImage.clientHeight
   };
 }
 
@@ -3116,30 +3130,29 @@ function updateCropDrag(pointerEvent) {
   if (!cropDrag) return;
   const dx = pointerEvent.clientX - cropDrag.startX;
   const dy = pointerEvent.clientY - cropDrag.startY;
-  const { startRect, wrapperW, wrapperH, handle } = cropDrag;
-  let { left, top, width, height } = startRect;
+  const { cornerIndex, startPoints, wrapperW, wrapperH } = cropDrag;
 
-  if (handle === 'move') {
-    left = clamp(startRect.left + dx, 0, wrapperW - startRect.width);
-    top = clamp(startRect.top + dy, 0, wrapperH - startRect.height);
+  if (cornerIndex === null) {
+    // 4隅まとめての平行移動。どれか1つでも外に出ないよう、移動量自体をクランプする
+    const minDx = Math.max(...startPoints.map(p => -p.x));
+    const maxDx = Math.min(...startPoints.map(p => wrapperW - p.x));
+    const minDy = Math.max(...startPoints.map(p => -p.y));
+    const maxDy = Math.min(...startPoints.map(p => wrapperH - p.y));
+    const clampedDx = clamp(dx, minDx, maxDx);
+    const clampedDy = clamp(dy, minDy, maxDy);
+    cropPoints = startPoints.map(p => ({ x: p.x + clampedDx, y: p.y + clampedDy }));
   } else {
-    if (handle.includes('w')) {
-      left = clamp(startRect.left + dx, 0, startRect.left + startRect.width - CROP_MIN_SIZE);
-      width = startRect.left + startRect.width - left;
-    }
-    if (handle.includes('e')) {
-      width = clamp(startRect.width + dx, CROP_MIN_SIZE, wrapperW - startRect.left);
-    }
-    if (handle.includes('n')) {
-      top = clamp(startRect.top + dy, 0, startRect.top + startRect.height - CROP_MIN_SIZE);
-      height = startRect.top + startRect.height - top;
-    }
-    if (handle.includes('s')) {
-      height = clamp(startRect.height + dy, CROP_MIN_SIZE, wrapperH - startRect.top);
-    }
+    // 個別の角を自由に移動（画像の範囲内にクランプするのみ。4隅の順序関係は問わない）
+    cropPoints = startPoints.map((p, i) => {
+      if (i !== cornerIndex) return { ...p };
+      return {
+        x: clamp(p.x + dx, 0, wrapperW),
+        y: clamp(p.y + dy, 0, wrapperH)
+      };
+    });
   }
 
-  applyCropRect({ left, top, width, height });
+  applyCropPoints();
 }
 
 function endCropDrag() {
@@ -3150,30 +3163,136 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-// クロップ範囲を確定し、実画像の解像度で切り抜いたJPEG画像をプレビューに反映する
+// 単位正方形(0,0)-(1,0)-(1,1)-(0,1)を、4点p0-p1-p2-p3（左上・右上・右下・左下）へ写す
+// 射影変換の係数を求める。詳細: Paul Heckbert, "Fundamentals of Texture Mapping and
+// Image Warping" (1989) の手法に基づく。戻り値は (u,v) -> (x,y) を計算する関数
+function createUnitSquareToQuadMapper(p0, p1, p2, p3) {
+  const dx1 = p1.x - p2.x, dy1 = p1.y - p2.y;
+  const dx2 = p3.x - p2.x, dy2 = p3.y - p2.y;
+  const sx = p0.x - p1.x + p2.x - p3.x;
+  const sy = p0.y - p1.y + p2.y - p3.y;
+  const denom = dx1 * dy2 - dx2 * dy1;
+
+  let g = 0;
+  let h = 0;
+  if (Math.abs(denom) > 1e-10) {
+    g = (sx * dy2 - dx2 * sy) / denom;
+    h = (dx1 * sy - sx * dy1) / denom;
+  }
+
+  const a = p1.x - p0.x + g * p1.x;
+  const b = p3.x - p0.x + h * p3.x;
+  const c = p0.x;
+  const d = p1.y - p0.y + g * p1.y;
+  const e = p3.y - p0.y + h * p3.y;
+  const f = p0.y;
+
+  return (u, v) => {
+    const denom2 = g * u + h * v + 1;
+    return {
+      x: (a * u + b * v + c) / denom2,
+      y: (d * u + e * v + f) / denom2
+    };
+  };
+}
+
+// srcImageData内の実数座標(x, y)をバイリニア補間でサンプリングし、[r,g,b]を返す
+function sampleBilinear(imageData, x, y) {
+  const { data, width, height } = imageData;
+  const x0 = clamp(Math.floor(x), 0, width - 1);
+  const y0 = clamp(Math.floor(y), 0, height - 1);
+  const x1 = Math.min(x0 + 1, width - 1);
+  const y1 = Math.min(y0 + 1, height - 1);
+  const fx = clamp(x - x0, 0, 1);
+  const fy = clamp(y - y0, 0, 1);
+
+  const i00 = (y0 * width + x0) * 4;
+  const i10 = (y0 * width + x1) * 4;
+  const i01 = (y1 * width + x0) * 4;
+  const i11 = (y1 * width + x1) * 4;
+
+  const result = [0, 0, 0];
+  for (let c = 0; c < 3; c++) {
+    const top = data[i00 + c] * (1 - fx) + data[i10 + c] * fx;
+    const bottom = data[i01 + c] * (1 - fx) + data[i11 + c] * fx;
+    result[c] = top * (1 - fy) + bottom * fy;
+  }
+  return result;
+}
+
+// クロップ範囲（4隅）を確定し、射影変換（パースペクティブ補正）で正対させた画像を
+// 実画像の解像度で切り抜いてプレビューに反映する。斜めから撮った名刺も長方形に補正される
 function confirmCrop() {
-  const rect = getCropRect();
+  showLoading(t('loadingProcessingPhoto'));
+  // 直後に重い同期処理を始めるとローディング表示が描画されないため、1フレーム待つ
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      try {
+        performPerspectiveCrop();
+      } finally {
+        hideLoading();
+      }
+    }, 0);
+  });
+}
+
+function performPerspectiveCrop() {
   const renderedW = elements.cropImage.clientWidth;
   const renderedH = elements.cropImage.clientHeight;
-  const scaleX = elements.cropImage.naturalWidth / renderedW;
-  const scaleY = elements.cropImage.naturalHeight / renderedH;
+  const naturalW = elements.cropImage.naturalWidth;
+  const naturalH = elements.cropImage.naturalHeight;
+  const scaleX = naturalW / renderedW;
+  const scaleY = naturalH / renderedH;
 
-  const sx = rect.left * scaleX;
-  const sy = rect.top * scaleY;
-  const sw = rect.width * scaleX;
-  const sh = rect.height * scaleY;
+  // 表示px -> 元画像の実ピクセル座標へ変換
+  const naturalPoints = cropPoints.map(p => ({ x: p.x * scaleX, y: p.y * scaleY }));
 
-  const outputScale = Math.min(1, CROP_MAX_OUTPUT_DIM / Math.max(sw, sh));
-  const outW = Math.max(1, Math.round(sw * outputScale));
-  const outH = Math.max(1, Math.round(sh * outputScale));
+  // 出力サイズは、上辺・下辺・左辺・右辺それぞれの長さの最大値から決定する
+  const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  const [tl, tr, br, bl] = naturalPoints;
+  const outW = Math.max(distance(tl, tr), distance(bl, br));
+  const outH = Math.max(distance(tl, bl), distance(tr, br));
+  const outputScale = Math.min(1, CROP_MAX_OUTPUT_DIM / Math.max(outW, outH));
+  const finalW = Math.max(1, Math.round(outW * outputScale));
+  const finalH = Math.max(1, Math.round(outH * outputScale));
 
-  const canvas = document.createElement('canvas');
-  canvas.width = outW;
-  canvas.height = outH;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(elements.cropImage, sx, sy, sw, sh, 0, 0, outW, outH);
+  // 元画像を読み込む解像度を抑え、メモリ使用量と処理時間を安全な範囲に収める
+  const sourceScale = Math.min(1, CROP_SOURCE_MAX_DIM / Math.max(naturalW, naturalH));
+  const sourceW = Math.max(1, Math.round(naturalW * sourceScale));
+  const sourceH = Math.max(1, Math.round(naturalH * sourceScale));
 
-  canvas.toBlob((blob) => {
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = sourceW;
+  sourceCanvas.height = sourceH;
+  const sourceCtx = sourceCanvas.getContext('2d');
+  sourceCtx.drawImage(elements.cropImage, 0, 0, sourceW, sourceH);
+  const sourceImageData = sourceCtx.getImageData(0, 0, sourceW, sourceH);
+
+  const scaledPoints = naturalPoints.map(p => ({ x: p.x * sourceScale, y: p.y * sourceScale }));
+  const mapper = createUnitSquareToQuadMapper(scaledPoints[0], scaledPoints[1], scaledPoints[2], scaledPoints[3]);
+
+  const outputCanvas = document.createElement('canvas');
+  outputCanvas.width = finalW;
+  outputCanvas.height = finalH;
+  const outputCtx = outputCanvas.getContext('2d');
+  const outputImageData = outputCtx.createImageData(finalW, finalH);
+
+  for (let y = 0; y < finalH; y++) {
+    const v = (y + 0.5) / finalH;
+    for (let x = 0; x < finalW; x++) {
+      const u = (x + 0.5) / finalW;
+      const src = mapper(u, v);
+      const [r, g, b] = sampleBilinear(sourceImageData, src.x, src.y);
+      const di = (y * finalW + x) * 4;
+      outputImageData.data[di] = r;
+      outputImageData.data[di + 1] = g;
+      outputImageData.data[di + 2] = b;
+      outputImageData.data[di + 3] = 255;
+    }
+  }
+  outputCtx.putImageData(outputImageData, 0, 0);
+
+  outputCanvas.toBlob((blob) => {
     if (!blob) return;
 
     if (pendingPhotoObjectUrl) {
