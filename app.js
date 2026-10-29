@@ -203,6 +203,8 @@ const I18N = {
     btnGallery: 'アルバムから選択',
     cropTitle: '写真のトリミング',
     cropHint: '四隅を名刺の角に合わせてドラッグしてください。斜めから撮影した写真も正対補正されます',
+    toastCropInvalidQuad: '選択範囲が交差しているか、小さすぎます。4隅の位置を調整してください',
+    toastCropError: '画像の補正処理に失敗しました。もう一度お試しください',
     labelName: '氏名 / 会社名',
     placeholderName: '例：山田 太郎 / 株式会社サンプル',
     labelAlphabet: '検索用アルファベット (半角英数)',
@@ -527,6 +529,8 @@ const I18N = {
     btnGallery: 'Choose from Album',
     cropTitle: 'Crop Photo',
     cropHint: 'Drag each corner onto the card\'s edge. Photos taken at an angle will be straightened automatically',
+    toastCropInvalidQuad: 'The selected area crosses itself or is too small. Adjust the 4 corners',
+    toastCropError: 'Failed to process the photo. Please try again',
     labelName: 'Name / Company',
     placeholderName: 'e.g. Taro Yamada / Sample Inc.',
     labelAlphabet: 'Alphabet for search (letters/numbers only)',
@@ -1331,6 +1335,9 @@ async function ensureAdMobInitialized() {
     updateAdPrivacySectionVisibility();
   } catch (error) {
     console.error('AdMob initialize error:', error);
+    // 失敗した場合は次回呼び出し時に再試行できるようフラグを戻す
+    // （成功時はtrueのままにして、以降の呼び出しをスキップさせる）
+    admobInitialized = false;
   }
 }
 
@@ -3261,8 +3268,10 @@ function createUnitSquareToQuadMapper(p0, p1, p2, p3) {
   };
 }
 
-// srcImageData内の実数座標(x, y)をバイリニア補間でサンプリングし、[r,g,b]を返す
-function sampleBilinear(imageData, x, y) {
+// srcImageData内の実数座標(x, y)をバイリニア補間でサンプリングし、出力ImageData.dataの
+// outIndexへ直接書き込む（R,G,Bの3チャンネル分）。出力解像度によっては数百万回呼ばれるため、
+// 呼び出しごとの配列確保を避けてGC負荷を抑える
+function sampleBilinearInto(imageData, x, y, outData, outIndex) {
   const { data, width, height } = imageData;
   const x0 = clamp(Math.floor(x), 0, width - 1);
   const y0 = clamp(Math.floor(y), 0, height - 1);
@@ -3276,24 +3285,51 @@ function sampleBilinear(imageData, x, y) {
   const i01 = (y1 * width + x0) * 4;
   const i11 = (y1 * width + x1) * 4;
 
-  const result = [0, 0, 0];
   for (let c = 0; c < 3; c++) {
     const top = data[i00 + c] * (1 - fx) + data[i10 + c] * fx;
     const bottom = data[i01 + c] * (1 - fx) + data[i11 + c] * fx;
-    result[c] = top * (1 - fy) + bottom * fy;
+    outData[outIndex + c] = top * (1 - fy) + bottom * fy;
   }
-  return result;
 }
 
 // クロップ範囲（4隅）を確定し、射影変換（パースペクティブ補正）で正対させた画像を
 // 実画像の解像度で切り抜いてプレビューに反映する。斜めから撮った名刺も長方形に補正される
+// 4隅が凸四角形になっているか（＝自己交差していない、面積がほぼゼロでない）を判定する。
+// 隣り合う3点ずつの外積の符号がすべて揃っていれば凸。角を大きく動かして線が交差したり、
+// つぶれてほぼ一直線になったりした状態のまま確定されるのを防ぐ
+function isValidCropQuad(points) {
+  let sign = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    const c = points[(i + 2) % points.length];
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (Math.abs(cross) < 1e-6) continue;
+    const currentSign = cross > 0 ? 1 : -1;
+    if (sign === 0) {
+      sign = currentSign;
+    } else if (currentSign !== sign) {
+      return false;
+    }
+  }
+  return sign !== 0;
+}
+
 function confirmCrop() {
+  if (!isValidCropQuad(cropPoints)) {
+    showToast(t('toastCropInvalidQuad'));
+    return;
+  }
+
   showLoading(t('loadingProcessingPhoto'));
   // 直後に重い同期処理を始めるとローディング表示が描画されないため、1フレーム待つ
   requestAnimationFrame(() => {
     setTimeout(() => {
       try {
         performPerspectiveCrop();
+      } catch (err) {
+        console.error('Perspective crop failed:', err);
+        showToast(t('toastCropError'));
       } finally {
         hideLoading();
       }
@@ -3342,17 +3378,15 @@ function performPerspectiveCrop() {
   const outputCtx = outputCanvas.getContext('2d');
   const outputImageData = outputCtx.createImageData(finalW, finalH);
 
+  const outData = outputImageData.data;
   for (let y = 0; y < finalH; y++) {
     const v = (y + 0.5) / finalH;
     for (let x = 0; x < finalW; x++) {
       const u = (x + 0.5) / finalW;
       const src = mapper(u, v);
-      const [r, g, b] = sampleBilinear(sourceImageData, src.x, src.y);
       const di = (y * finalW + x) * 4;
-      outputImageData.data[di] = r;
-      outputImageData.data[di + 1] = g;
-      outputImageData.data[di + 2] = b;
-      outputImageData.data[di + 3] = 255;
+      sampleBilinearInto(sourceImageData, src.x, src.y, outData, di);
+      outData[di + 3] = 255;
     }
   }
   outputCtx.putImageData(outputImageData, 0, 0);
