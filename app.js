@@ -1049,7 +1049,27 @@ let silentLoginTimeout = null;
 
 function attemptSilentLogin() {
   const hasLoggedInBefore = localStorage.getItem('accessToken') || localStorage.getItem('folderId');
-  if (STATE.tokenClient && hasLoggedInBefore) {
+  if (!hasLoggedInBefore) {
+    showScreen('screen-auth');
+    return;
+  }
+
+  if (IS_NATIVE_APP) {
+    // ネイティブアプリ版も、アクセストークンが切れるたび（だいたい1時間ごと）に
+    // 毎回手動サインインを要求するのを避けるため、Custom Tabs経由でサイレント再ログインを試みる
+    console.log('Attempting silent login (native)...');
+    showLoading(t('loadingSigningIn'));
+    clearTimeout(silentLoginTimeout);
+    silentLoginTimeout = setTimeout(() => {
+      console.log('Silent login (native) timed out, showing sign-in screen.');
+      hideLoading();
+      showScreen('screen-auth');
+    }, 8000);
+    handleNativeLogin(true);
+    return;
+  }
+
+  if (STATE.tokenClient) {
     console.log('Attempting silent login...');
     showLoading(t('loadingSigningIn'));
     // ブラウザの制限等でコールバックが一切呼ばれないケースに備え、
@@ -1188,14 +1208,18 @@ const NATIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file https://w
 let pendingNativeFlow = null; // 'login' | 'folderPicker' | null
 let nativeFolderPickerResolve = null;
 
-function handleNativeLogin() {
-  pendingNativeFlow = 'login';
+// silent=trueの場合、Custom Tabsを一瞬開くだけでUIを表示させずトークンの再取得のみ試みる
+// （GIS版のprompt:'none'と同じ考え方）。ユーザーのGoogleセッションが有効かつ同意済みであれば
+// 画面を見せずに再ログインできるが、無効な場合はエラーで返ってくるため呼び出し側で
+// 通常のログイン画面へフォールバックする必要がある
+function handleNativeLogin(silent = false) {
+  pendingNativeFlow = silent ? 'silentLogin' : 'login';
   const params = new URLSearchParams({
     client_id: STATE.clientId,
     redirect_uri: NATIVE_OAUTH_CALLBACK_URL,
     response_type: 'token',
     scope: NATIVE_OAUTH_SCOPE,
-    prompt: 'consent',
+    prompt: silent ? 'none' : 'consent',
     include_granted_scopes: 'true'
   });
   window.Capacitor.Plugins.Browser.open({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
@@ -1204,7 +1228,9 @@ function handleNativeLogin() {
 // oauth-callback.htmlがカスタムURLスキーム（com.hideyukikumura.cardvalia://oauth-callback#...）で
 // アプリに制御を戻してきた際の受け取り処理。GISの成功コールバックと同じ後続処理を行う
 function handleNativeOAuthCallback(url) {
+  const wasSilentLogin = pendingNativeFlow === 'silentLogin';
   pendingNativeFlow = null;
+  clearTimeout(silentLoginTimeout);
   window.Capacitor.Plugins.Browser.close().catch(() => {});
 
   const hashIndex = url.indexOf('#');
@@ -1212,7 +1238,13 @@ function handleNativeOAuthCallback(url) {
 
   if (params.get('error')) {
     hideLoading();
-    showToast(t('toastAuthError', { error: params.get('error') }));
+    if (wasSilentLogin) {
+      // サイレント再ログインの失敗（セッション切れ・同意取り消し等）は想定内の挙動なので、
+      // エラー表示はせず通常のサインイン画面へ静かにフォールバックする
+      showScreen('screen-auth');
+    } else {
+      showToast(t('toastAuthError', { error: params.get('error') }));
+    }
     return;
   }
 
@@ -1277,6 +1309,12 @@ if (IS_NATIVE_APP) {
   window.Capacitor.Plugins.Browser.addListener('browserFinished', () => {
     if (pendingNativeFlow === 'login') {
       hideLoading();
+    } else if (pendingNativeFlow === 'silentLogin') {
+      // サイレント再ログイン中にCustom Tabsが閉じられた（応答を受け取れなかった）場合も、
+      // 通常のサインイン画面へフォールバックする
+      clearTimeout(silentLoginTimeout);
+      hideLoading();
+      showScreen('screen-auth');
     } else if (pendingNativeFlow === 'folderPicker' && nativeFolderPickerResolve) {
       const resolve = nativeFolderPickerResolve;
       nativeFolderPickerResolve = null;
