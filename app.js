@@ -62,6 +62,9 @@ let STATE = {
   // クローズドテスト中に無償付与された場合はtrue（CLOSED_TESTING_AUTO_UNLOCK参照）。
   // 一度付与したら、実購入の有無に関わらず取り消さない（テスターが本番公開後もそのまま使い続けられるように）
   freeAccessGranted: localStorage.getItem('freeAccessGranted') === '1',
+  // ログイン中のGoogleアカウントが開発者本人のものかどうか（DEVELOPER_EMAIL_HASH参照）。
+  // ログイン完了後、checkDeveloperAccountで非同期に確定させる
+  isDeveloperAccount: false,
   tokenClient: null,  // Google OAuth Token Client
   imageCache: {},     // { fileId: blobUrl }
   user: null          // { name, email, avatarUrl }
@@ -83,6 +86,11 @@ const IAP_UNLOCK_PRODUCT_ID = 'unlock_all_features';
 // 戻しても、既存テスターの特典は失われない（付与済みかどうかはfreeAccessGranted自体で判定するため）。
 // 本番公開のタイミングでfalseへ切り替えること
 const CLOSED_TESTING_AUTO_UNLOCK = false;
+
+// 開発者自身のGoogleアカウント（メールアドレスをSHA-256でハッシュ化した値。ソースコードに
+// メールアドレスを平文で残さないため）でログインした場合、購入なしで常にアップグレード特典
+// （上限解除＋広告非表示）を有効にする。checkDeveloperAccount参照
+const DEVELOPER_EMAIL_HASH = '406617ce87f9551d9534c72dbdf64f13b8b71b7f39e1f024c451dc79361362ed';
 
 // -------------------------------------------------------------
 // I18N（UIの表示言語のみ切り替える。名刺データ自体は翻訳しない）
@@ -1472,10 +1480,31 @@ async function fetchUserProfile() {
       if (data.picture) {
         elements.userAvatar.innerHTML = `<img src="${data.picture}" alt="avatar" style="width:100%; height:100%; border-radius:50%;">`;
       }
+      await checkDeveloperAccount(data.email);
     }
   } catch (e) {
     console.error('Failed to fetch user profile:', e);
   }
+}
+
+// ログイン中のメールアドレスをSHA-256でハッシュ化し、DEVELOPER_EMAIL_HASHと一致するか確認する。
+// 一致すれば、購入状況に関わらずアップグレード特典（上限解除＋広告非表示）を有効にする
+// （開発者本人が自分のアプリを広告・上限なしで使えるようにするための特例）
+async function checkDeveloperAccount(email) {
+  if (!email || !window.crypto || !window.crypto.subtle) {
+    STATE.isDeveloperAccount = false;
+    return;
+  }
+  try {
+    const normalized = email.trim().toLowerCase();
+    const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+    const hashHex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+    STATE.isDeveloperAccount = hashHex === DEVELOPER_EMAIL_HASH;
+  } catch (e) {
+    console.error('Failed to verify developer account:', e);
+    STATE.isDeveloperAccount = false;
+  }
+  updateUpgradeSectionDisplay();
 }
 
 // -------------------------------------------------------------
@@ -2585,7 +2614,7 @@ async function openEditCard(cardId) {
 // アップグレード特典（上限解除＋広告非表示）が有効かどうか。実購入済み、またはクローズドテスト中の
 // 無償付与済み（freeAccessGranted）のいずれかであればtrue
 function hasProAccess() {
-  return STATE.isPro || STATE.freeAccessGranted;
+  return STATE.isPro || STATE.freeAccessGranted || STATE.isDeveloperAccount;
 }
 
 // クローズドテスト中、この端末で初めて起動された際に一度だけアップグレード特典を無償付与する
