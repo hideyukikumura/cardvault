@@ -1063,6 +1063,12 @@ function attemptSilentLogin() {
   }
 
   if (IS_NATIVE_APP) {
+    // アカウントの指定（login_hint）なしのサイレント要求は、端末のChromeに複数のGoogleアカウントが
+    // あるとinteraction_requiredで必ず失敗する。前回ログイン時のアカウントIDが未保存なら試みない
+    if (!localStorage.getItem('googleAccountId')) {
+      showScreen('screen-auth');
+      return;
+    }
     // ネイティブアプリ版も、アクセストークンが切れるたび（だいたい1時間ごと）に
     // 毎回手動サインインを要求するのを避けるため、Custom Tabs経由でサイレント再ログインを試みる
     console.log('Attempting silent login (native)...');
@@ -1213,7 +1219,7 @@ const NATIVE_OAUTH_SCOPE = 'https://www.googleapis.com/auth/drive.file https://w
 // Custom Tabsで開いた認証系フロー（ログイン／既存フォルダ選択）が、まだ結果を受け取れていないかを
 // 共通で管理する。ユーザーがCustom Tabsを手動で閉じた（バックボタン等）場合はappUrlOpenが発火せず
 // browserFinishedのみが呼ばれるため、その際にどちらのフローの後始末をすべきか判定するのに使う
-let pendingNativeFlow = null; // 'login' | 'folderPicker' | null
+let pendingNativeFlow = null; // 'login' | 'silentLogin' | 'folderPicker' | null
 let nativeFolderPickerResolve = null;
 
 // silent=trueの場合、Custom Tabsを一瞬開くだけでUIを表示させずトークンの再取得のみ試みる
@@ -1230,6 +1236,12 @@ function handleNativeLogin(silent = false) {
     prompt: silent ? 'none' : 'consent',
     include_granted_scopes: 'true'
   });
+  // サイレント時は前回ログインしたアカウント（GoogleのアカウントID）を明示する。これがないと
+  // Googleが無操作でアカウントを選べず、interaction_requiredで拒否される
+  const accountId = localStorage.getItem('googleAccountId');
+  if (silent && accountId) {
+    params.set('login_hint', accountId);
+  }
   window.Capacitor.Plugins.Browser.open({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}` });
 }
 
@@ -1318,11 +1330,15 @@ if (IS_NATIVE_APP) {
     if (pendingNativeFlow === 'login') {
       hideLoading();
     } else if (pendingNativeFlow === 'silentLogin') {
-      // サイレント再ログイン中にCustom Tabsが閉じられた（応答を受け取れなかった）場合も、
-      // 通常のサインイン画面へフォールバックする
+      // この通知は結果（appUrlOpen）より先に届くことがある。ここでフローを終了させると、
+      // 後から届いた失敗結果が通常ログインの失敗として扱われエラー表示されてしまうため、
+      // フロー状態は残したまま少しだけ結果を待ち、届かなければサインイン画面へフォールバックする
       clearTimeout(silentLoginTimeout);
-      hideLoading();
-      showScreen('screen-auth');
+      silentLoginTimeout = setTimeout(() => {
+        hideLoading();
+        showScreen('screen-auth');
+      }, 1500);
+      return;
     } else if (pendingNativeFlow === 'folderPicker' && nativeFolderPickerResolve) {
       const resolve = nativeFolderPickerResolve;
       nativeFolderPickerResolve = null;
@@ -1461,7 +1477,8 @@ function logout() {
   localStorage.removeItem('folderId');
   localStorage.removeItem('folderName');
   localStorage.removeItem('metadataFileId');
-  
+  localStorage.removeItem('googleAccountId');
+
   showToast(t('toastLoggedOut'));
   showScreen('screen-auth');
 }
@@ -1475,6 +1492,8 @@ async function fetchUserProfile() {
     if (res.ok) {
       const data = await res.json();
       STATE.user = data;
+      // 次回以降のサイレント再ログインでアカウントを指定するために保存する（handleNativeLogin参照）
+      if (data.sub) localStorage.setItem('googleAccountId', data.sub);
       elements.userName.textContent = data.name || t('userNoName');
       elements.userEmail.textContent = data.email || '';
       if (data.picture) {
