@@ -3021,7 +3021,7 @@ function registerEventListeners() {
   elements.kassenRankingList.addEventListener('click', (e) => {
     const item = e.target.closest('.kassen-ranking-item');
     if (!item) return;
-    goToCardFromKassen(item.dataset.id);
+    goToCardOnMain(item.dataset.id);
   });
 
   // 合戦モード：地形再生成（確認ダイアログ）
@@ -3093,7 +3093,7 @@ function registerEventListeners() {
   elements.duelRankingList.addEventListener('click', (e) => {
     const item = e.target.closest('.kassen-ranking-item');
     if (!item) return;
-    goToCardFromKassen(item.dataset.id);
+    goToCardOnMain(item.dataset.id);
   });
 
   // デュエルモード：デュエル開始・対戦相手再選択
@@ -3110,6 +3110,13 @@ function registerEventListeners() {
   elements.btnStartDerby.addEventListener('click', startDerbyRace);
   elements.btnDerbyReselect.addEventListener('click', drawDerbyLineup);
 
+  // ダービーモード：レース終了後、出走者の行をタップでその名刺へジャンプ
+  elements.derbyLineup.addEventListener('click', (e) => {
+    if (!elements.derbyLineup.classList.contains('derby-lineup-finished')) return;
+    const row = e.target.closest('.derby-entry');
+    if (row && row.dataset.cardId) goToCardOnMain(row.dataset.cardId);
+  });
+
   // ダービーモード：ランキング表示の切り替え（トグル）
   elements.btnDerbyRanking.addEventListener('click', () => {
     showDerbyView(STATE.derbyView === 'ranking' ? 'match' : 'ranking');
@@ -3120,7 +3127,7 @@ function registerEventListeners() {
   elements.derbyRankingList.addEventListener('click', (e) => {
     const item = e.target.closest('.kassen-ranking-item');
     if (!item) return;
-    goToCardFromKassen(item.dataset.id);
+    goToCardOnMain(item.dataset.id);
   });
 }
 
@@ -4776,12 +4783,12 @@ async function showKassenResult(team, mvp, points, isAnniversaryBattle, isCenten
 
   const mvpLink = document.getElementById('kassen-mvp-link');
   if (mvpLink) {
-    mvpLink.addEventListener('click', () => goToCardFromKassen(mvp.id));
+    mvpLink.addEventListener('click', () => goToCardOnMain(mvp.id));
   }
 }
 
-// MVPの名刺タップで合戦モードを抜け、メイン画面でその名刺までスクロールする
-function goToCardFromKassen(cardId) {
+// 合戦のMVP・ダービーの出走者などをタップした際に、メイン画面へ移動してその名刺までスクロールする
+function goToCardOnMain(cardId) {
   showScreen('screen-main');
 
   elements.searchInput.value = '';
@@ -5022,7 +5029,7 @@ async function showDuelResult(winnerCard, points, isAnniversaryDuel, isCentennia
 
   const winnerLink = document.getElementById('duel-winner-link');
   if (winnerLink) {
-    winnerLink.addEventListener('click', () => goToCardFromKassen(winnerCard.id));
+    winnerLink.addEventListener('click', () => goToCardOnMain(winnerCard.id));
   }
 }
 
@@ -5486,7 +5493,7 @@ async function renderDerbyLineup() {
   const cards = STATE.derby.cards;
   elements.derbyLineup.style.height = `${cards.length * DERBY_ROW_STEP - DERBY_ROW_GAP}px`;
   elements.derbyLineup.innerHTML = cards.map((card, i) => `
-    <div class="derby-entry derby-gate-${i + 1}" id="derby-race-row-${i}" style="top:${i * DERBY_ROW_STEP}px">
+    <div class="derby-entry derby-gate-${i + 1}" id="derby-race-row-${i}" data-card-id="${escapeHTML(card.id)}" style="top:${i * DERBY_ROW_STEP}px">
       <div class="derby-rank" id="derby-rank-${i}">${i + 1}</div>
       <div class="derby-gate-badge">${i + 1}</div>
       <div class="derby-entry-image-wrapper" id="derby-entry-image-${i}"><i data-lucide="user"></i></div>
@@ -5495,6 +5502,7 @@ async function renderDerbyLineup() {
         <div class="derby-entry-alphabet">${escapeHTML(card.alphabet)}</div>
       </div>
       <span class="kassen-ranking-count" id="derby-points-${i}"></span>
+      <i data-lucide="chevron-right" class="derby-entry-arrow"></i>
     </div>
   `).join('');
   lucide.createIcons();
@@ -5520,6 +5528,7 @@ function drawDerbyLineup() {
   // （Fisher-Yatesでシャッフルするため、ゲート番号による有利不利は生まれない）
   STATE.derby.lateralPos = picked ? picked.map((_, i) => i) : [];
   STATE.derby.spreadTargets = picked ? shuffleDerbyIndices(picked.length) : [];
+  elements.derbyLineup.classList.remove('derby-lineup-finished');
 
   const notEnough = !picked;
   elements.derbyEmptyState.classList.toggle('hidden', !notEnough);
@@ -5665,6 +5674,9 @@ async function startDerbyRace() {
 
   STATE.derby.racing = false;
   elements.btnDerbyReselect.classList.remove('hidden');
+  // レース終了後のみ、出走者の行をタップしてその名刺へジャンプできるようにする
+  // （レース前に誤タップでダービー画面を離れてしまわないよう、終了後に限定）
+  elements.derbyLineup.classList.add('derby-lineup-finished');
 }
 
 // -------------------------------------------------------------

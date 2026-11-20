@@ -2276,6 +2276,27 @@ body {
   white-space: nowrap;
 }
 
+/* レース終了後のみ、行をタップして名刺へジャンプできることを示す矢印を出す */
+.derby-entry-arrow {
+  display: none;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.derby-lineup-finished .derby-entry {
+  cursor: pointer;
+}
+
+.derby-lineup-finished .derby-entry:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.derby-lineup-finished .derby-entry-arrow {
+  display: block;
+}
+
 /* -----------------------------------------
    UPGRADE / PAYWALL SCREEN
 ----------------------------------------- */
